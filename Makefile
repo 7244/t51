@@ -17,6 +17,7 @@ COMPILER += -fno-pie
 COMPILER += -nostdlib -fomit-frame-pointer -fno-stack-protector -ffreestanding -fno-asynchronous-unwind-tables -fdata-sections -ffunction-sections -Qn
 COMPILER += $($(ARCH)_COMPILER)
 COMPILER += -c
+COMPILER += -Iinclude
 
 debug: CFLAGS = -O1 -g
 debug: _all
