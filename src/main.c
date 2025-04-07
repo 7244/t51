@@ -23,9 +23,11 @@ typedef struct{
   uint64_t threshold;
   uint32_t payload_size;
 
+  bool rand_sip;
+  uint32_t sip;
+
   bool rand_sport;
   bool rand_dport;
-
   uint16_t sport;
   uint16_t dport;
 }pile_t;
@@ -48,6 +50,9 @@ FUNC void print_help(){
     "  -h, --help           Print help\n"
     "      --threshold NUM  Threshold of packets to send     (default 1000)\n"
     "      --flood          This option supersedes the 'threshold'\n"
+    "\n"
+    "IP Options:\n"
+    "   -s,--saddr ADDR           IP source IP address       (default RANDOM)\n"
     "\n"
     "DCCP/TCP/UDP Options:\n"
     "      --sport NUM            source port                (default RANDOM)\n"
@@ -85,6 +90,13 @@ FUNC uintptr_t param_func_psize(const uint8_t **arg, pile_t *pile){
   return 1;
 }
 
+FUNC uintptr_t param_func_saddr(const uint8_t **arg, pile_t *pile){
+  pile->sip = NET_ipv4_from_string(arg[0]);
+  pile->rand_sip = 0;
+
+  return 1;
+}
+
 __attribute__((noreturn))
 FUNC void main(uintptr_t argc, const uint8_t **argv){
 
@@ -97,6 +109,8 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
   pile.target_ipv4 = 0;
   pile.threshold = 1000;
   pile.payload_size = 32;
+
+  pile.rand_sip = 1;
 
   pile.rand_sport = 1;
   pile.rand_dport = 1;
@@ -116,6 +130,7 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
       }
 
       if(arg[1] == 'h'){ print_help(); }
+      else if(arg[1] == 's'){ iarg += param_func_saddr(&argv[iarg], &pile); }
       else{
         puts_literal("error: unexpected argument '-");
         puts_char_repeat(arg[1], 1);
@@ -130,6 +145,7 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
       if(!STR_n0cmp("help", pstr)){ print_help(); }
       else if(!STR_n0cmp("flood", pstr)){ pile.threshold = (uint64_t)-1; }
       else if(!STR_n0cmp("threshold", pstr)){ iarg += param_func_threshold(&argv[iarg], &pile); }
+      else if(!STR_n0cmp("saddr", pstr)){ iarg += param_func_saddr(&argv[iarg], &pile); }
       else if(!STR_n0cmp("sport", pstr)){ iarg += param_func_port(&argv[iarg], &pile, 1); }
       else if(!STR_n0cmp("dport", pstr)){ iarg += param_func_port(&argv[iarg], &pile, 0); }
       else if(!STR_n0cmp("psize", pstr)){ iarg += param_func_psize(&argv[iarg], &pile); }

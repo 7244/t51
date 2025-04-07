@@ -67,7 +67,12 @@ FUNC void run(pile_t *pile){
   ipv4hdr->ttl = 255;
   ipv4hdr->protocol = NET_IPPROTO_UDP;
   ipv4hdr->check = 0;
-  ipv4hdr->saddr = 0;
+  if(pile->rand_sip){
+    ipv4hdr->saddr = NET_hton32(0);
+  }
+  else{
+    ipv4hdr->saddr = NET_hton32(pile->sip);
+  }
   ipv4hdr->daddr = NET_hton32(dst.ip);
 
   uint32_t ipv4check_pre = checksum_pre(ipv4hdr, sizeof(*ipv4hdr));
@@ -88,21 +93,34 @@ FUNC void run(pile_t *pile){
   udphdr->check = 0;
 
   uint32_t udpcheck_pre = 0;
+  udpcheck_pre += checksum_pre(&ipv4hdr->saddr, sizeof(ipv4hdr->saddr));
   udpcheck_pre += checksum_pre(&ipv4hdr->daddr, sizeof(ipv4hdr->daddr));
   udpcheck_pre += NET_hton16(NET_IPPROTO_UDP);
   udpcheck_pre += udphdr->len;
   udpcheck_pre += checksum_pre(udphdr, sizeof(*udphdr) + pile->payload_size);
 
   for(uint64_t ithreshold = pile->threshold; ithreshold--;){
-    ipv4hdr->saddr++;
+    if(pile->rand_sip){
+      ipv4hdr->saddr++;
 
-    ipv4hdr->check = checksum_final(
-      ipv4check_pre +
-      checksum_pre_single32(ipv4hdr->saddr)
-    );
+      ipv4hdr->check = checksum_final(
+        ipv4check_pre +
+        checksum_pre_single32(ipv4hdr->saddr)
+      );
+    }
+    else{
+      ipv4hdr->check = checksum_final(
+        ipv4check_pre
+      );
+    }
+    
+
 
     uint32_t udpcheck_pre_current = udpcheck_pre;
 
+    if(pile->rand_sip){
+      udpcheck_pre_current += checksum_pre_single32(ipv4hdr->saddr);    
+    }
     if(pile->rand_sport){
       udphdr->source++;
       udpcheck_pre_current += checksum_pre_single16(udphdr->source);
@@ -112,7 +130,6 @@ FUNC void run(pile_t *pile){
       udpcheck_pre_current += checksum_pre_single16(udphdr->dest);
     }
 
-    udpcheck_pre_current += checksum_pre_single32(ipv4hdr->saddr);
 
     udphdr->check = checksum_final(udpcheck_pre_current);
 
