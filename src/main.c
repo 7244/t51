@@ -27,8 +27,7 @@ typedef struct{
   uint64_t threshold;
   uint32_t payload_size;
 
-  bool rand_sip;
-  uint32_t sip;
+  NET_addr4prefix_t source;
 
   bool rand_sport;
   bool rand_dport;
@@ -59,7 +58,7 @@ FUNC void print_help(){
     "  -h, --help           Print help\n"
     "\n"
     "IP Options:\n"
-    "  -s, --saddr ADDR     IP source IP address             (default RANDOM)\n"
+    "  -s, --saddr ADDR     IP source IP address             (default 0.0.0.0/0)\n"
     "\n"
     "DCCP/TCP/UDP Options:\n"
     "      --sport NUM      source port                      (default RANDOM)\n"
@@ -105,8 +104,9 @@ FUNC uintptr_t param_func_psize(const uint8_t **arg, pile_t *pile){
 }
 
 FUNC uintptr_t param_func_saddr(const uint8_t **arg, pile_t *pile){
-  pile->sip = NET_ipv4_from_string(arg[0]);
-  pile->rand_sip = 0;
+  if(NET_addr4prefix_from_string(arg[0], &pile->source)){
+    _abort();
+  }
 
   return 1;
 }
@@ -126,7 +126,8 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
   pile.threshold = 1000;
   pile.payload_size = 32;
 
-  pile.rand_sip = 1;
+  pile.source.ip = 0;
+  pile.source.prefix = 0;
 
   pile.rand_sport = 1;
   pile.rand_dport = 1;
