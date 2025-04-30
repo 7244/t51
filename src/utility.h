@@ -2,7 +2,8 @@
 #define STDOUT 1
 #define STDERR 2
 
-#include <WITCH/STR/STR.h>
+#include _WITCH_PATH(STR/STR.h)
+#include _WITCH_PATH(TH/TH.h)
 
 uint8_t _utility_print_fdint;
 uint16_t _utility_print_index;

@@ -28,7 +28,7 @@ FUNC uint16_t checksum_final(uint32_t pre){
   return ~(uint16_t)pre;
 }
 
-FUNC void run(pile_t *pile){
+FUNC void run_thread(pile_t *pile){
   NET_socket_t s;
   sint32_t err = NET_socket2(NET_AF_INET, NET_SOCK_RAW, NET_IPPROTO_RAW, &s);
   if(err){
@@ -113,13 +113,12 @@ FUNC void run(pile_t *pile){
         ipv4check_pre
       );
     }
-    
 
 
     uint32_t udpcheck_pre_current = udpcheck_pre;
 
     if(pile->rand_sip){
-      udpcheck_pre_current += checksum_pre_single32(ipv4hdr->saddr);    
+      udpcheck_pre_current += checksum_pre_single32(ipv4hdr->saddr);
     }
     if(pile->rand_sport){
       udphdr->source++;
@@ -138,4 +137,23 @@ FUNC void run(pile_t *pile){
       _abort();
     }
   }
+}
+
+FUNC void run_entry(pile_t *pile){
+  while(1){
+    uint32_t ct = __atomic_add_fetch(&pile->current_thread, 1, __ATOMIC_SEQ_CST);
+    if(ct >= pile->threads){
+      run_thread(pile);
+
+      syscall1(__NR_exit, 0);
+      __unreachable();
+    }
+    if(TH_newthread_orphan(run_entry, pile) < 0){
+      __abort();
+    }
+  }
+}
+
+FUNC void start_thingies(pile_t *pile){
+  run_entry(pile);
 }

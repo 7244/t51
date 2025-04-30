@@ -20,6 +20,10 @@
 
 typedef struct{
   uint32_t target_ipv4;
+
+  uint32_t current_thread; /* starts with 0 always */
+  uint32_t threads;
+
   uint64_t threshold;
   uint32_t payload_size;
 
@@ -30,6 +34,8 @@ typedef struct{
   bool rand_dport;
   uint16_t sport;
   uint16_t dport;
+
+  NET_socket_t s;
 }pile_t;
 
 #include "run.h"
@@ -47,20 +53,28 @@ FUNC void print_help(){
     "Usage: " set_program_name " [OPTIONS]\n"
     "\n"
     "Options:\n"
-    "  -h, --help           Print help\n"
+    "      --threads NUM    how many threads there gonna be  (default 1)\n"
     "      --threshold NUM  Threshold of packets to send     (default 1000)\n"
     "      --flood          This option supersedes the 'threshold'\n"
+    "  -h, --help           Print help\n"
     "\n"
     "IP Options:\n"
-    "   -s,--saddr ADDR           IP source IP address       (default RANDOM)\n"
+    "  -s, --saddr ADDR     IP source IP address             (default RANDOM)\n"
     "\n"
     "DCCP/TCP/UDP Options:\n"
-    "      --sport NUM            source port                (default RANDOM)\n"
-    "      --dport NUM            destination port           (default RANDOM)\n"
-    "      --psize NUM            payload size               (default 32)\n"
+    "      --sport NUM      source port                      (default RANDOM)\n"
+    "      --dport NUM      destination port                 (default RANDOM)\n"
+    "      --psize NUM      payload size                     (default 32)\n"
   );
 
   _exit(0);
+}
+
+FUNC uintptr_t param_func_threads(const uint8_t **arg, pile_t *pile){
+  uintptr_t index = 0;
+  pile->threads = STR_psu64_iguess_abort(arg[0], &index);
+
+  return 1;
 }
 
 FUNC uintptr_t param_func_threshold(const uint8_t **arg, pile_t *pile){
@@ -107,6 +121,8 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
   pile_t pile;
 
   pile.target_ipv4 = 0;
+  pile.current_thread = 0;
+  pile.threads = 1;
   pile.threshold = 1000;
   pile.payload_size = 32;
 
@@ -143,8 +159,9 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
       const uint8_t *pstr = &arg[2];
 
       if(!STR_n0cmp("help", pstr)){ print_help(); }
-      else if(!STR_n0cmp("flood", pstr)){ pile.threshold = (uint64_t)-1; }
+      else if(!STR_n0cmp("threads", pstr)){ iarg += param_func_threads(&argv[iarg], &pile); }
       else if(!STR_n0cmp("threshold", pstr)){ iarg += param_func_threshold(&argv[iarg], &pile); }
+      else if(!STR_n0cmp("flood", pstr)){ pile.threshold = (uint64_t)-1; }
       else if(!STR_n0cmp("saddr", pstr)){ iarg += param_func_saddr(&argv[iarg], &pile); }
       else if(!STR_n0cmp("sport", pstr)){ iarg += param_func_port(&argv[iarg], &pile, 1); }
       else if(!STR_n0cmp("dport", pstr)){ iarg += param_func_port(&argv[iarg], &pile, 0); }
@@ -174,7 +191,7 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
 
   utility_print_setfd(STDOUT);
 
-  run(&pile);
+  start_thingies(&pile);
 
   _exit(0);
 }
