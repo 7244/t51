@@ -28,6 +28,8 @@ typedef struct{
   uint32_t payload_size;
 
   NET_addr4prefix_t source;
+  
+  NET_addr4prefix_t difaceip;
 
   bool rand_sport;
   bool rand_dport;
@@ -59,6 +61,7 @@ FUNC void print_help(){
     "\n"
     "IP Options:\n"
     "  -s, --saddr ADDR     IP source IP address             (default 0.0.0.0/0)\n"
+    "      --difaceip ADDR  Destination interface IP address (default target_ipv4)\n"
     "\n"
     "DCCP/TCP/UDP Options:\n"
     "      --sport NUM      source port                      (default RANDOM)\n"
@@ -111,6 +114,14 @@ FUNC uintptr_t param_func_saddr(const uint8_t **arg, pile_t *pile){
   return 1;
 }
 
+FUNC uintptr_t param_func_difaceip(const uint8_t **arg, pile_t *pile){
+  if(NET_addr4prefix_from_string(arg[0], &pile->difaceip)){
+    _abort();
+  }
+
+  return 1;
+}
+
 __attribute__((noreturn))
 FUNC void main(uintptr_t argc, const uint8_t **argv){
 
@@ -128,6 +139,9 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
 
   pile.source.ip = 0;
   pile.source.prefix = 0;
+  
+  pile.difaceip.ip = 0;
+  pile.difaceip.prefix = 33;
 
   pile.rand_sport = 1;
   pile.rand_dport = 1;
@@ -164,6 +178,7 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
       else if(!STR_n0cmp("threshold", pstr)){ iarg += param_func_threshold(&argv[iarg], &pile); }
       else if(!STR_n0cmp("flood", pstr)){ pile.threshold = (uint64_t)-1; }
       else if(!STR_n0cmp("saddr", pstr)){ iarg += param_func_saddr(&argv[iarg], &pile); }
+      else if(!STR_n0cmp("difaceip", pstr)){ iarg += param_func_difaceip(&argv[iarg], &pile); }
       else if(!STR_n0cmp("sport", pstr)){ iarg += param_func_port(&argv[iarg], &pile, 1); }
       else if(!STR_n0cmp("dport", pstr)){ iarg += param_func_port(&argv[iarg], &pile, 0); }
       else if(!STR_n0cmp("psize", pstr)){ iarg += param_func_psize(&argv[iarg], &pile); }
@@ -187,6 +202,16 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
 
   if(pile.target_ipv4 == 0){
     puts_literal("need target ipv4 address\n");
+    _exit(1);
+  }
+  
+  if(pile.difaceip.prefix == 33){
+    pile.difaceip.ip = pile.target_ipv4;
+    pile.difaceip.prefix = 32;
+  }
+  
+  if(pile.difaceip.prefix != 32){
+    puts_literal("difaceip's prefix cant be not 32 yet\n");
     _exit(1);
   }
 

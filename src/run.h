@@ -36,12 +36,14 @@ FUNC void run_thread(pile_t *pile){
     _exit(1);
   }
 
-  NET_addr4port_t dst;
-  dst.ip = pile->target_ipv4;
-  dst.port = 0;
+  {
+    NET_addr4port_t difaceaddr4port;
+    difaceaddr4port.ip = pile->difaceip.ip;
+    difaceaddr4port.port = 0;
 
-  if(NET_connect(&s, &dst)){
-    _abort();
+    if(NET_connect(&s, &difaceaddr4port)){
+      _abort();
+    }
   }
 
   uint8_t data[0x800];
@@ -73,7 +75,7 @@ FUNC void run_thread(pile_t *pile){
   else{
     ipv4hdr->saddr = NET_hton32(pile->source.ip);
   }
-  ipv4hdr->daddr = NET_hton32(dst.ip);
+  ipv4hdr->daddr = NET_hton32(pile->target_ipv4);
 
   uint32_t ipv4check_pre = checksum_pre(ipv4hdr, sizeof(*ipv4hdr));
 
