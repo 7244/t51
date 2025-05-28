@@ -75,7 +75,12 @@ FUNC void run_thread(pile_t *pile){
   else{
     ipv4hdr->saddr = NET_hton32(pile->source.ip);
   }
-  ipv4hdr->daddr = NET_hton32(pile->target_ipv4);
+  if(pile->target_addr.prefix != 32){
+    ipv4hdr->daddr = NET_hton32(0);
+  }
+  else{
+    ipv4hdr->daddr = NET_hton32(pile->target_addr.ip);
+  }
 
   uint32_t ipv4check_pre = checksum_pre(ipv4hdr, sizeof(*ipv4hdr));
 
@@ -102,8 +107,12 @@ FUNC void run_thread(pile_t *pile){
   udpcheck_pre += checksum_pre(udphdr, sizeof(*udphdr) + pile->payload_size);
 
   ipv4hdr->saddr = NET_hton32(pile->source.ip);
+  ipv4hdr->daddr = NET_hton32(pile->target_addr.ip);
 
   for(uint64_t ithreshold = pile->threshold; ithreshold--;){
+  
+    uint32_t ipv4check_pre_current = ipv4check_pre;
+  
     if(pile->source.prefix != 32){
       ipv4hdr->saddr = NET_ntoh32(ipv4hdr->saddr) - pile->source.ip;
       ipv4hdr->saddr += 1;
@@ -111,23 +120,30 @@ FUNC void run_thread(pile_t *pile){
         ipv4hdr->saddr &= ((uint32_t)1 << 32 - pile->source.prefix) - 1;
       }
       ipv4hdr->saddr = NET_hton32(ipv4hdr->saddr + pile->source.ip);
+      
+      ipv4check_pre_current += checksum_pre_single32(ipv4hdr->saddr);
+    }
+    if(pile->target_addr.prefix != 32){
+      ipv4hdr->daddr = NET_ntoh32(ipv4hdr->daddr) - pile->target_addr.ip;
+      ipv4hdr->daddr += 1;
+      if(pile->target_addr.prefix != 0){
+        ipv4hdr->daddr &= ((uint32_t)1 << 32 - pile->target_addr.prefix) - 1;
+      }
+      ipv4hdr->daddr = NET_hton32(ipv4hdr->daddr + pile->target_addr.ip);
+      
+      ipv4check_pre_current += checksum_pre_single32(ipv4hdr->daddr);
+    }
 
-      ipv4hdr->check = checksum_final(
-        ipv4check_pre +
-        checksum_pre_single32(ipv4hdr->saddr)
-      );
-    }
-    else{
-      ipv4hdr->check = checksum_final(
-        ipv4check_pre
-      );
-    }
+    ipv4hdr->check = checksum_final(ipv4check_pre_current);
 
 
     uint32_t udpcheck_pre_current = udpcheck_pre;
 
     if(pile->source.prefix != 32){
       udpcheck_pre_current += checksum_pre_single32(ipv4hdr->saddr);
+    }
+    if(pile->target_addr.prefix != 32){
+      udpcheck_pre_current += checksum_pre_single32(ipv4hdr->daddr);
     }
     if(pile->rand_sport){
       udphdr->source++;
@@ -140,6 +156,7 @@ FUNC void run_thread(pile_t *pile){
 
 
     udphdr->check = checksum_final(udpcheck_pre_current);
+
 
     IO_ssize_t rsize = IO_write(&s.fd, data, ipv4hdr->tot_len);
     if((IO_size_t)rsize > (IO_size_t)-4096){

@@ -19,7 +19,7 @@
 #include "utility.h"
 
 typedef struct{
-  uint32_t target_ipv4;
+  NET_addr4prefix_t target_addr;
 
   uint32_t current_thread; /* starts with 0 always */
   uint32_t threads;
@@ -61,7 +61,7 @@ FUNC void print_help(){
     "\n"
     "IP Options:\n"
     "  -s, --saddr ADDR     IP source IP address             (default 0.0.0.0/0)\n"
-    "      --difaceip ADDR  Destination interface IP address (default target_ipv4)\n"
+    "      --difaceip ADDR  Destination interface IP address (default target_addr)\n"
     "\n"
     "DCCP/TCP/UDP Options:\n"
     "      --sport NUM      source port                      (default RANDOM)\n"
@@ -131,7 +131,9 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
 
   pile_t pile;
 
-  pile.target_ipv4 = 0;
+  pile.target_addr.ip = 0;
+  pile.target_addr.prefix = 33;
+
   pile.current_thread = 0;
   pile.threads = 1;
   pile.threshold = 1000;
@@ -191,25 +193,26 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
       }
     }
     else{
-      if(pile.target_ipv4 != 0){
+      if(pile.target_addr.prefix != 33){
         puts_literal("multiple targets are not allowed\n");
         _exit(1);
       }
 
-      pile.target_ipv4 = NET_ipv4_from_string(arg);
+      if(NET_addr4prefix_from_string(arg, &pile.target_addr)){
+        _abort();
+      }
     }
   }
 
-  if(pile.target_ipv4 == 0){
-    puts_literal("need target ipv4 address\n");
+  if(pile.target_addr.prefix == 33){
+    puts_literal("need target address\n");
     _exit(1);
   }
-  
+
   if(pile.difaceip.prefix == 33){
-    pile.difaceip.ip = pile.target_ipv4;
-    pile.difaceip.prefix = 32;
+    pile.difaceip = pile.target_addr;
   }
-  
+
   if(pile.difaceip.prefix != 32){
     puts_literal("difaceip's prefix cant be not 32 yet\n");
     _exit(1);
