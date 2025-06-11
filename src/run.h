@@ -174,7 +174,7 @@ FUNC void run_entry(pile_t *pile){
       syscall1(__NR_exit, 0);
       __unreachable();
     }
-    if(TH_newthread_orphan(run_entry, pile) < 0){
+    if(TH_newthread_orphan((void (*)(void*))run_entry, pile) < 0){
       __abort();
     }
   }
