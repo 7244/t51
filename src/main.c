@@ -15,6 +15,7 @@
 #include <WITCH/PR/PR.h>
 #include <WITCH/IO/IO.h>
 #include <WITCH/NET/NET.h>
+#include <WITCH/T/T.h>
 
 #include "utility.h"
 
@@ -27,7 +28,13 @@ typedef struct{
   uint64_t threshold;
   uint32_t payload_size;
   
-  uint32_t prepeat;
+  uint64_t prepeat;
+  
+  uint64_t ppspersrcip;
+  struct{
+    uint64_t current;
+    uint64_t last_refill_at;
+  }rate_limit_ppspersrcip;
 
   NET_addr4prefix_t source;
   
@@ -56,20 +63,21 @@ FUNC void print_help(){
     "Usage: " set_program_name " [OPTIONS]\n"
     "\n"
     "Options:\n"
-    "      --threads NUM    how many threads there gonna be  (default 1)\n"
-    "      --threshold NUM  Threshold of packets to send     (default 1000)\n"
-    "      --flood          This option supersedes the 'threshold'\n"
-    "      --prepeat NUM    packet repeat amount             (default 1)\n"
-    "  -h, --help           Print help\n"
+    "      --threads NUM      how many threads there gonna be  (default 1)\n"
+    "      --threshold NUM    Threshold of packets to send     (default 1000)\n"
+    "      --flood            This option supersedes the 'threshold'\n"
+    "      --prepeat NUM      packet repeat amount             (default 1)\n"
+    "      --ppspersrcip NUM  packet repeat amount             (default 1)\n"
+    "  -h, --help             Print help\n"
     "\n"
     "IP Options:\n"
-    "  -s, --saddr ADDR     IP source IP address             (default 0.0.0.0/0)\n"
-    "      --difaceip ADDR  Destination interface IP address (default target_addr)\n"
+    "  -s, --saddr ADDR       IP source IP address             (default 0.0.0.0/0)\n"
+    "      --difaceip ADDR    Destination interface IP address (default target_addr)\n"
     "\n"
     "DCCP/TCP/UDP Options:\n"
-    "      --sport NUM      source port                      (default RANDOM)\n"
-    "      --dport NUM      destination port                 (default RANDOM)\n"
-    "      --psize NUM      payload size                     (default 32)\n"
+    "      --sport NUM        source port                      (default RANDOM)\n"
+    "      --dport NUM        destination port                 (default RANDOM)\n"
+    "      --psize NUM        payload size                     (default 32)\n"
   );
 
   _exit(0);
@@ -92,6 +100,13 @@ FUNC uintptr_t param_func_threshold(const uint8_t **arg, pile_t *pile){
 FUNC uintptr_t param_func_prepeat(const uint8_t **arg, pile_t *pile){
   uintptr_t index = 0;
   pile->prepeat = STR_psu64_iguess_abort(arg[0], &index);
+
+  return 1;
+}
+
+FUNC uintptr_t param_func_ppspersrcip(const uint8_t **arg, pile_t *pile){
+  uintptr_t index = 0;
+  pile->ppspersrcip = STR_psu64_iguess_abort(arg[0], &index);
 
   return 1;
 }
@@ -150,6 +165,10 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
   pile.payload_size = 32;
   pile.prepeat = 1;
 
+  pile.ppspersrcip = (uint64_t)-1;
+  pile.rate_limit_ppspersrcip.current = 0;
+  pile.rate_limit_ppspersrcip.last_refill_at = T_nowi();
+
   pile.source.ip = 0;
   pile.source.prefix = 0;
   
@@ -191,6 +210,7 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
       else if(!STR_n0cmp("threshold", pstr)){ iarg += param_func_threshold(&argv[iarg], &pile); }
       else if(!STR_n0cmp("flood", pstr)){ pile.threshold = (uint64_t)-1; }
       else if(!STR_n0cmp("prepeat", pstr)){ iarg += param_func_prepeat(&argv[iarg], &pile); }
+      else if(!STR_n0cmp("ppspersrcip", pstr)){ iarg += param_func_ppspersrcip(&argv[iarg], &pile); }
       else if(!STR_n0cmp("saddr", pstr)){ iarg += param_func_saddr(&argv[iarg], &pile); }
       else if(!STR_n0cmp("difaceip", pstr)){ iarg += param_func_difaceip(&argv[iarg], &pile); }
       else if(!STR_n0cmp("sport", pstr)){ iarg += param_func_port(&argv[iarg], &pile, 1); }

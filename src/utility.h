@@ -77,3 +77,45 @@ FUNC void _abort(const char *filename, uintptr_t filename_length, uintptr_t line
 #define _abort() \
   _abort(__FILE__, sizeof(__FILE__) - 1, __LINE__); \
   __unreachable();
+
+
+FUNC uint32_t fast_limiter(
+  uint64_t *p_current,
+  uint64_t *p_last_refill_at,
+  uint64_t value,
+  uint64_t wanted,
+  uint64_t ctime
+){
+  uint64_t delta = ctime - *p_last_refill_at;
+
+  if((sint64_t)delta >= (sint64_t)10000000){
+    uint64_t delta_scale = delta / 10000000;
+    if (delta_scale > 100) {
+        delta_scale = 100;
+    }
+
+    uint64_t tokens_to_sub = *p_current * delta_scale / 100;
+
+    if (tokens_to_sub) {
+      ctime -= delta % 10000000;
+
+      uint64_t reverse_worth = delta_scale * 10000000 - delta_scale * 10000000 * 100 /
+        (
+          (*p_current * delta_scale * 100) / (tokens_to_sub * 100)
+        )
+      ;
+      ctime -= reverse_worth;
+
+      *p_current -= tokens_to_sub;
+      *p_last_refill_at = ctime;
+    }
+  }
+
+  if (*p_current + value >= wanted) {
+      return 1;
+  }
+  
+  *p_current += value;
+
+  return 0;
+}
