@@ -158,9 +158,11 @@ FUNC void run_thread(pile_t *pile){
     udphdr->check = checksum_final(udpcheck_pre_current);
 
 
-    IO_ssize_t rsize = IO_write(&s.fd, data, ipv4hdr->tot_len);
-    if((IO_size_t)rsize > (IO_size_t)-4096){
-      _abort();
+    for(uint32_t iprepeat = pile->prepeat; iprepeat--;){
+      IO_ssize_t rsize = IO_write(&s.fd, data, ipv4hdr->tot_len);
+      if((IO_size_t)rsize > (IO_size_t)-4096){
+        _abort();
+      }
     }
   }
 }
