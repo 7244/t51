@@ -67,7 +67,7 @@ FUNC void print_help(){
     "      --threshold NUM    Threshold of packets to send     (default 1000)\n"
     "      --flood            This option supersedes the 'threshold'\n"
     "      --prepeat NUM      packet repeat amount             (default 1)\n"
-    "      --ppspersrcip NUM  packet repeat amount             (default 1)\n"
+    "      --ppspersrcip NUM  pps per srcip                    (default -1)\n"
     "  -h, --help             Print help\n"
     "\n"
     "IP Options:\n"
