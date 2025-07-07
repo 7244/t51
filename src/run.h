@@ -28,6 +28,32 @@ FUNC uint16_t checksum_final(uint32_t pre){
   return ~(uint16_t)pre;
 }
 
+FUNC void get_src_mac(NET_socket_t *sock, const void *ifname, uint8_t *mac){
+  NET_ifreq_t ifr;
+  __builtin_memcpy(ifr.ifr_name, ifname, MEM_cstreu(ifname) + 1);
+
+  if(NET_ctl3(sock, NET_SIOCGIFHWADDR, &ifr) < 0) {
+    _abort();
+  }
+
+  __builtin_memcpy(mac, ifr.ifr_hwaddr.sa_data, 6);
+}
+
+FUNC void get_dst_mac(NET_socket_t *sock, const void *ifname, uint32_t dstip, uint8_t *mac) {
+  NET_arpreq_t areq = {0};
+  _NET_sockaddr_in_t *sin = (_NET_sockaddr_in_t *)&areq.arp_pa;
+  sin->sin_family = NET_AF_INET;
+  sin->sin_addr = NET_hton32(dstip);
+  __builtin_memcpy(areq.arp_dev, ifname, MEM_cstreu(ifname) + 1);
+
+  if(NET_ctl3(sock, NET_SIOCGARP, &areq) < 0) {
+    __builtin_memset(mac, 0, 6);
+  }
+  else{
+    __builtin_memcpy(mac, areq.arp_ha.sa_data, 6);
+  }
+}
+
 FUNC void run_thread(pile_t *pile){
   NET_socket_t s;
   sint32_t err = NET_socket2(NET_AF_PACKET, NET_SOCK_RAW, NET_ETH_P_ALL, &s);
@@ -105,8 +131,9 @@ FUNC void run_thread(pile_t *pile){
     _abort();
   }
 
-  __builtin_memset(machdr->src, 5, sizeof(machdr->src));
-  __builtin_memset(machdr->dst, 5, sizeof(machdr->dst));
+  get_src_mac(&s, pile->difacename, machdr->src);
+  get_dst_mac(&s, pile->difacename, pile->target_addr.ip, machdr->dst);
+
   machdr->prot = 0x0008;
 
   for(uint32_t i = 0; i < pile->payload_size; i++){
@@ -246,11 +273,6 @@ FUNC void run_thread(pile_t *pile){
       __builtin_memcpy(pkt, machdr, tpacket2_hdr->tp_len);
 
       __atomic_store_n(&tpacket2_hdr->tp_status, NET_TP_STATUS_SEND_REQUEST, __ATOMIC_SEQ_CST);
-  
-      IO_ssize_t rsize = IO_write(&s.fd, data, ipv4hdr->tot_len);
-      if((IO_size_t)rsize > (IO_size_t)-4096){
-        _abort();
-      }
     }
 
     if(IO_write(&s.fd, NULL, 0) < 0) {
