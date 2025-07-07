@@ -37,7 +37,8 @@ typedef struct{
   }rate_limit_ppspersrcip;
 
   NET_addr4prefix_t source;
-  
+
+  const uint8_t *difacename;
   NET_addr4prefix_t difaceip;
 
   bool rand_sport;
@@ -65,7 +66,7 @@ FUNC void print_help(){
     "Options:\n"
     "      --threads NUM      how many threads there gonna be  (default 1)\n"
     "      --threshold NUM    Threshold of packets to send     (default 1000)\n"
-    "      --flood            This option supersedes the 'threshold'\n"
+    "      --flood            Makes threshold infinite\n"
     "      --prepeat NUM      packet repeat amount             (default 1)\n"
     "      --ppspersrcip NUM  pps per srcip                    (default -1)\n"
     "  -h, --help             Print help\n"
@@ -73,6 +74,7 @@ FUNC void print_help(){
     "IP Options:\n"
     "  -s, --saddr ADDR       IP source IP address             (default 0.0.0.0/0)\n"
     "      --difaceip ADDR    Destination interface IP address (default target_addr)\n"
+    "      --diface NAME      Destination interface name       (default target_addr)\n"
     "\n"
     "DCCP/TCP/UDP Options:\n"
     "      --sport NUM        source port                      (default RANDOM)\n"
@@ -139,6 +141,12 @@ FUNC uintptr_t param_func_saddr(const uint8_t **arg, pile_t *pile){
   return 1;
 }
 
+FUNC uintptr_t param_func_diface(const uint8_t **arg, pile_t *pile){
+  pile->difacename = arg[0];
+
+  return 1;
+}
+
 FUNC uintptr_t param_func_difaceip(const uint8_t **arg, pile_t *pile){
   if(NET_addr4prefix_from_string(arg[0], &pile->difaceip)){
     _abort();
@@ -171,6 +179,8 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
 
   pile.source.ip = 0;
   pile.source.prefix = 0;
+
+  pile.difacename = NULL;
   
   pile.difaceip.ip = 0;
   pile.difaceip.prefix = 33;
@@ -212,6 +222,7 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
       else if(!STR_n0cmp("prepeat", pstr)){ iarg += param_func_prepeat(&argv[iarg], &pile); }
       else if(!STR_n0cmp("ppspersrcip", pstr)){ iarg += param_func_ppspersrcip(&argv[iarg], &pile); }
       else if(!STR_n0cmp("saddr", pstr)){ iarg += param_func_saddr(&argv[iarg], &pile); }
+      else if(!STR_n0cmp("diface", pstr)){ iarg += param_func_diface(&argv[iarg], &pile); }
       else if(!STR_n0cmp("difaceip", pstr)){ iarg += param_func_difaceip(&argv[iarg], &pile); }
       else if(!STR_n0cmp("sport", pstr)){ iarg += param_func_port(&argv[iarg], &pile, 1); }
       else if(!STR_n0cmp("dport", pstr)){ iarg += param_func_port(&argv[iarg], &pile, 0); }
