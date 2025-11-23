@@ -36,6 +36,8 @@ typedef struct{
     uint64_t last_refill_at;
   }rate_limit_ppspersrcip;
 
+  bool kernel_bypass;
+
   NET_addr4prefix_t source;
 
   const uint8_t *difacename;
@@ -64,22 +66,23 @@ FUNC void print_help(){
     "Usage: " set_program_name " [OPTIONS]\n"
     "\n"
     "Options:\n"
-    "      --threads NUM      how many threads there gonna be  (default 1)\n"
-    "      --threshold NUM    Threshold of packets to send     (default 1000)\n"
-    "      --flood            Makes threshold infinite\n"
-    "      --prepeat NUM      packet repeat amount             (default 1)\n"
-    "      --ppspersrcip NUM  pps per srcip                    (default -1)\n"
-    "  -h, --help             Print help\n"
+    "      --threads NUM         how many threads there gonna be  (default 1)\n"
+    "      --threshold NUM       Threshold of packets to send     (default 1000)\n"
+    "      --flood               Makes threshold infinite\n"
+    "      --prepeat NUM         packet repeat amount             (default 1)\n"
+    "      --ppspersrcip NUM     pps per srcip                    (default -1)\n"
+    "      --kernel_bypass BOOL                                   (default true)\n"
+    "  -h, --help                Print help\n"
     "\n"
     "IP Options:\n"
-    "  -s, --saddr ADDR       IP source IP address             (default 0.0.0.0/0)\n"
-    "      --difaceip ADDR    Destination interface IP address (default target_addr)\n"
-    "      --diface NAME      Destination interface name       (default target_addr)\n"
+    "  -s, --saddr ADDR     IP source IP address             (default 0.0.0.0/0)\n"
+    "      --difaceip ADDR  Destination interface IP address (default target_addr)\n"
+    "      --diface NAME    Destination interface name       (default target_addr)\n"
     "\n"
     "DCCP/TCP/UDP Options:\n"
-    "      --sport NUM        source port                      (default RANDOM)\n"
-    "      --dport NUM        destination port                 (default RANDOM)\n"
-    "      --psize NUM        payload size                     (default 32)\n"
+    "      --sport NUM  source port                      (default RANDOM)\n"
+    "      --dport NUM  destination port                 (default RANDOM)\n"
+    "      --psize NUM  payload size                     (default 32)\n"
   );
 
   _exit(0);
@@ -109,6 +112,12 @@ FUNC uintptr_t param_func_prepeat(const uint8_t **arg, pile_t *pile){
 FUNC uintptr_t param_func_ppspersrcip(const uint8_t **arg, pile_t *pile){
   uintptr_t index = 0;
   pile->ppspersrcip = STR_psu64_iguess_abort(arg[0], &index);
+
+  return 1;
+}
+
+FUNC uintptr_t param_func_kernel_bypass(const uint8_t **arg, pile_t *pile){
+  pile->kernel_bypass = STR_ParseCStringAsBool_abort(arg[0]);
 
   return 1;
 }
@@ -177,6 +186,8 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
   pile.rate_limit_ppspersrcip.current = 0;
   pile.rate_limit_ppspersrcip.last_refill_at = T_nowi();
 
+  pile.kernel_bypass = true;
+
   pile.source.ip = 0;
   pile.source.prefix = 0;
 
@@ -221,6 +232,7 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
       else if(!STR_n0cmp("flood", pstr)){ pile.threshold = (uint64_t)-1; }
       else if(!STR_n0cmp("prepeat", pstr)){ iarg += param_func_prepeat(&argv[iarg], &pile); }
       else if(!STR_n0cmp("ppspersrcip", pstr)){ iarg += param_func_ppspersrcip(&argv[iarg], &pile); }
+      else if(!STR_n0cmp("kernel_bypass", pstr)){ iarg += param_func_kernel_bypass(&argv[iarg], &pile); }
       else if(!STR_n0cmp("saddr", pstr)){ iarg += param_func_saddr(&argv[iarg], &pile); }
       else if(!STR_n0cmp("diface", pstr)){ iarg += param_func_diface(&argv[iarg], &pile); }
       else if(!STR_n0cmp("difaceip", pstr)){ iarg += param_func_difaceip(&argv[iarg], &pile); }

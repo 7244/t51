@@ -39,18 +39,10 @@ FUNC void get_src_mac(NET_socket_t *sock, const void *ifname, uint8_t *mac){
   __builtin_memcpy(mac, ifr.ifr_hwaddr.sa_data, 6);
 }
 
-FUNC void get_dst_mac(NET_socket_t *sock, const void *ifname, uint32_t dstip, uint8_t *mac) {
-  NET_arpreq_t areq = {0};
-  _NET_sockaddr_in_t *sin = (_NET_sockaddr_in_t *)&areq.arp_pa;
-  sin->sin_family = NET_AF_INET;
-  sin->sin_addr = NET_hton32(dstip);
-  __builtin_memcpy(areq.arp_dev, ifname, MEM_cstreu(ifname) + 1);
-
-  if(NET_ctl3(sock, NET_SIOCGARP, &areq) < 0) {
-    __builtin_memset(mac, 0, 6);
-  }
-  else{
-    __builtin_memcpy(mac, areq.arp_ha.sa_data, 6);
+FUNC void get_dst_mac(NET_socket_t *sock, const void *ifname, uint8_t *mac) {
+  sint32_t err = NET_GetDefaultRouteMacAddress_ifname_cstr(ifname, mac);
+  if(err != 0){
+    _abort();
   }
 }
 
@@ -110,8 +102,10 @@ FUNC void run_thread(pile_t *pile){
     _abort();
   }
 
-  if(NET_setsockopt(&s, NET_SOL_PACKET, NET_PACKET_QDISC_BYPASS, 1) < 0){
-    _abort();
+  if(pile->kernel_bypass){
+    if(NET_setsockopt(&s, NET_SOL_PACKET, NET_PACKET_QDISC_BYPASS, 1) < 0){
+      _abort();
+    }
   }
 
   uintptr_t ring_size = tpacket_req.tp_block_size * tpacket_req.tp_block_nr;
@@ -132,7 +126,7 @@ FUNC void run_thread(pile_t *pile){
   }
 
   get_src_mac(&s, pile->difacename, machdr->src);
-  get_dst_mac(&s, pile->difacename, pile->target_addr.ip, machdr->dst);
+  get_dst_mac(&s, pile->difacename, machdr->dst);
 
   machdr->prot = 0x0008;
 

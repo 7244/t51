@@ -21,7 +21,10 @@ COMPILER += -Iinclude
 
 debug: CFLAGS = -O1 -g
 debug: _all
-release: CFLAGS = -O3 -ffast-math -Os
+small: CFLAGS = -s -Os
+small: LINKER += -z nosectionheader
+small: _all
+release: CFLAGS = -O3 -ffast-math
 release: LINKER += -z nosectionheader
 release: _all
 
