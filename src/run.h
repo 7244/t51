@@ -183,11 +183,10 @@ FUNC void run_thread(pile_t *pile){
   ipv4hdr->saddr = NET_hton32(pile->source.ip);
   ipv4hdr->daddr = NET_hton32(pile->target_addr.ip);
 
-  uint64_t tpacket_index = (uint64_t)-1;
+  uint64_t tpacket_index = 0;
   while(1){
     for(uintptr_t i = 0; i < tpacket_req.tp_frame_nr / 4; i++){
-      tpacket_index++;
-      if(tpacket_index == pile->threshold){
+      if(tpacket_index >= pile->threshold){
         goto gt_threshold_done;
       }
 
@@ -250,7 +249,8 @@ FUNC void run_thread(pile_t *pile){
         }
       }
 
-      uint64_t tpacket_mod = (tpacket_index + 1) % tpacket_req.tp_frame_nr;
+      uint64_t tpacket_mod = tpacket_index % tpacket_req.tp_frame_nr;
+      tpacket_index++;
 
       NET_tpacket2_hdr_t *tpacket2_hdr = (NET_tpacket2_hdr_t *)((uint8_t *)ring + tpacket_mod * tpacket_req.tp_frame_size);
 
@@ -264,7 +264,7 @@ FUNC void run_thread(pile_t *pile){
 
       tpacket2_hdr->tp_len = sizeof(NET_machdr_t) + sizeof(NET_ipv4hdr_t) + sizeof(NET_udphdr_t) + pile->payload_size;
 
-      __builtin_memcpy(pkt, machdr, tpacket2_hdr->tp_len);
+      __builtin_memcpy(pkt, data, tpacket2_hdr->tp_len);
 
       __atomic_store_n(&tpacket2_hdr->tp_status, NET_TP_STATUS_SEND_REQUEST, __ATOMIC_SEQ_CST);
     }
@@ -276,7 +276,9 @@ FUNC void run_thread(pile_t *pile){
 
   gt_threshold_done:;
 
-  /* TODO wait for packets to sent */
+  if(IO_write(&s.fd, NULL, 0) < 0) {
+    _abort();
+  }
 }
 
 FUNC void run_entry(pile_t *pile){
