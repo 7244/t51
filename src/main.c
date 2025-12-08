@@ -192,7 +192,7 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
   pile.source.prefix = 0;
 
   pile.difacename = NULL;
-  
+
   pile.difaceip.ip = 0;
   pile.difaceip.prefix = 33;
 
@@ -264,13 +264,15 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
     _exit(1);
   }
 
-  if(pile.difaceip.prefix == 33){
-    pile.difaceip = pile.target_addr;
-  }
-
-  if(pile.difaceip.prefix != 32){
-    puts_literal("difaceip's prefix cant be not 32 yet\n");
-    _exit(1);
+  if(pile.difacename == NULL){
+    if(pile.difaceip.prefix == 33){
+      pile.difaceip = pile.target_addr;
+    }
+  
+    if(pile.difaceip.prefix != 32){
+      puts_literal("difaceip's prefix cant be not 32 yet\n");
+      _exit(1);
+    }
   }
 
   utility_print_setfd(STDOUT);
