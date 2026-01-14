@@ -39,8 +39,16 @@ FUNC void get_src_mac(NET_socket_t *sock, const void *ifname, uint8_t *mac){
   __builtin_memcpy(mac, ifr.ifr_hwaddr.sa_data, 6);
 }
 
-FUNC void get_dst_mac(NET_socket_t *sock, const void *ifname, uint8_t *mac) {
-  sint32_t err = NET_GetDefaultRouteMacAddress_ifname_cstr(ifname, mac);
+FUNC void get_dst_mac(pile_t *pile, NET_socket_t *sock, const void *ifname, uint8_t *mac) {
+  sint32_t err;
+
+  if(pile->force_gateway32){
+    err = NET_GetMacAddressByGateway32_ifname_cstr(mac, pile->gateway32, ifname);
+  }
+  else{
+    err = NET_GetDefaultRouteMacAddress_ifname_cstr(mac, ifname);
+  }
+
   if(err != 0){
     _abort();
   }
@@ -130,7 +138,7 @@ FUNC void run_thread(pile_t *pile){
     __builtin_memcpy(machdr->dst, pile->dst_mac, sizeof(pile->dst_mac));
   }
   else{
-    get_dst_mac(&s, pile->difacename, machdr->dst);
+    get_dst_mac(pile, &s, pile->difacename, machdr->dst);
   }
 
   machdr->prot = 0x0008;

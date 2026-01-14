@@ -14,10 +14,11 @@
 #include <WITCH/WITCH.h>
 #include <WITCH/PR/PR.h>
 #include <WITCH/IO/IO.h>
-#include <WITCH/NET/NET.h>
 #include <WITCH/T/T.h>
 
 #include "utility.h"
+
+#include <WITCH/NET/NET.h>
 
 typedef struct{
   NET_addr4prefix_t target_addr;
@@ -38,6 +39,8 @@ typedef struct{
 
   bool kernel_bypass;
 
+  bool force_gateway32;
+  uint32_t gateway32;
   bool force_dst_mac;
   uint8_t dst_mac[6];
 
@@ -125,6 +128,15 @@ FUNC uintptr_t param_func_kernel_bypass(const uint8_t **arg, pile_t *pile){
   return 1;
 }
 
+FUNC uintptr_t param_func_gateway32(const uint8_t **arg, pile_t *pile){
+  pile->force_gateway32 = true;
+
+  /* TODO NET_ipv4_from_string is not safe function */
+  pile->gateway32 = NET_ipv4_from_string(arg[0]);
+
+  return 1;
+}
+
 FUNC uintptr_t param_func_dstmac(const uint8_t **arg, pile_t *pile){
   pile->force_dst_mac = true;
 
@@ -199,6 +211,8 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
 
   pile.kernel_bypass = true;
 
+  pile.force_gateway32 = false;
+
   pile.force_dst_mac = false;
 
   pile.source.ip = 0;
@@ -246,6 +260,7 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
       else if(!STR_n0cmp("prepeat", pstr)){ iarg += param_func_prepeat(&argv[iarg], &pile); }
       else if(!STR_n0cmp("ppspersrcip", pstr)){ iarg += param_func_ppspersrcip(&argv[iarg], &pile); }
       else if(!STR_n0cmp("kernel_bypass", pstr)){ iarg += param_func_kernel_bypass(&argv[iarg], &pile); }
+      else if(!STR_n0cmp("gateway32", pstr)){ iarg += param_func_gateway32(&argv[iarg], &pile); }
       else if(!STR_n0cmp("dstmac", pstr)){ iarg += param_func_dstmac(&argv[iarg], &pile); }
       else if(!STR_n0cmp("saddr", pstr)){ iarg += param_func_saddr(&argv[iarg], &pile); }
       else if(!STR_n0cmp("diface", pstr)){ iarg += param_func_diface(&argv[iarg], &pile); }
