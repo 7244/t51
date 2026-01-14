@@ -38,6 +38,9 @@ typedef struct{
 
   bool kernel_bypass;
 
+  bool force_dst_mac;
+  uint8_t dst_mac[6];
+
   NET_addr4prefix_t source;
 
   const uint8_t *difacename;
@@ -122,6 +125,14 @@ FUNC uintptr_t param_func_kernel_bypass(const uint8_t **arg, pile_t *pile){
   return 1;
 }
 
+FUNC uintptr_t param_func_dstmac(const uint8_t **arg, pile_t *pile){
+  pile->force_dst_mac = true;
+
+  NET_mac6_from_string(pile->dst_mac, arg[0]);
+
+  return 1;
+}
+
 FUNC uintptr_t param_func_port(const uint8_t **arg, pile_t *pile, bool s_or_d){
   uintptr_t index = 0;
   if(s_or_d){
@@ -188,6 +199,8 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
 
   pile.kernel_bypass = true;
 
+  pile.force_dst_mac = false;
+
   pile.source.ip = 0;
   pile.source.prefix = 0;
 
@@ -233,6 +246,7 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
       else if(!STR_n0cmp("prepeat", pstr)){ iarg += param_func_prepeat(&argv[iarg], &pile); }
       else if(!STR_n0cmp("ppspersrcip", pstr)){ iarg += param_func_ppspersrcip(&argv[iarg], &pile); }
       else if(!STR_n0cmp("kernel_bypass", pstr)){ iarg += param_func_kernel_bypass(&argv[iarg], &pile); }
+      else if(!STR_n0cmp("dstmac", pstr)){ iarg += param_func_dstmac(&argv[iarg], &pile); }
       else if(!STR_n0cmp("saddr", pstr)){ iarg += param_func_saddr(&argv[iarg], &pile); }
       else if(!STR_n0cmp("diface", pstr)){ iarg += param_func_diface(&argv[iarg], &pile); }
       else if(!STR_n0cmp("difaceip", pstr)){ iarg += param_func_difaceip(&argv[iarg], &pile); }

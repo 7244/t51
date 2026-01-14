@@ -126,7 +126,12 @@ FUNC void run_thread(pile_t *pile){
   }
 
   get_src_mac(&s, pile->difacename, machdr->src);
-  get_dst_mac(&s, pile->difacename, machdr->dst);
+  if(pile->force_dst_mac){
+    __builtin_memcpy(machdr->dst, pile->dst_mac, sizeof(pile->dst_mac));
+  }
+  else{
+    get_dst_mac(&s, pile->difacename, machdr->dst);
+  }
 
   machdr->prot = 0x0008;
 
