@@ -4,10 +4,20 @@
   #define set_Verbose 0
 #endif
 
+#ifndef set_libc
+  #if defined(set_use_dpdk)
+    #define set_libc 1
+  #else
+    #define set_libc 0
+  #endif
+#endif
+
 
 #define FUNC static
 
-#define __platform_nostdlib
+#if !set_libc
+  #define __platform_nostdlib
+#endif
 #define WITCH_PRE_is_not_allowed
 #define __WITCH_IO_allow_sigpipe
 
@@ -19,6 +29,12 @@
 #include "utility.h"
 
 #include <WITCH/NET/NET.h>
+
+#ifdef set_use_dpdk
+  #include <rte_eal.h>
+  #include <rte_ethdev.h>
+  #include <rte_mbuf.h>
+#endif
 
 typedef struct{
   NET_addr4prefix_t target_addr;
@@ -38,6 +54,9 @@ typedef struct{
   }rate_limit_ppspersrcip;
 
   bool kernel_bypass;
+  #ifdef set_use_dpdk
+    bool use_dpdk;
+  #endif
 
   bool force_gateway32;
   uint32_t gateway32;
@@ -78,6 +97,9 @@ FUNC void print_help(){
     "      --prepeat NUM         packet repeat amount             (default 1)\n"
     "      --ppspersrcip NUM     pps per srcip                    (default -1)\n"
     "      --kernel_bypass BOOL                                   (default true)\n"
+    #ifdef set_use_dpdk
+    "      --use_dpdk BOOL                                        (default true)\n"
+    #endif
     "  -h, --help                Print help\n"
     "\n"
     "IP Options:\n"
@@ -127,6 +149,14 @@ FUNC uintptr_t param_func_kernel_bypass(const uint8_t **arg, pile_t *pile){
 
   return 1;
 }
+
+#ifdef set_use_dpdk
+  FUNC uintptr_t param_func_use_dpdk(const uint8_t **arg, pile_t *pile){
+    pile->use_dpdk = STR_ParseCStringAsBool_abort(arg[0]);
+
+    return 1;
+  }
+#endif
 
 FUNC uintptr_t param_func_gateway32(const uint8_t **arg, pile_t *pile){
   pile->force_gateway32 = true;
@@ -187,8 +217,14 @@ FUNC uintptr_t param_func_difaceip(const uint8_t **arg, pile_t *pile){
   return 1;
 }
 
-__attribute__((noreturn))
-FUNC void main(uintptr_t argc, const uint8_t **argv){
+#if set_libc
+  int main(int _argc, const char **_argv){
+    uintptr_t argc = _argc;
+    const uint8_t **argv = (const uint8_t **)_argv;
+#else
+  __attribute__((noreturn))
+  FUNC void main(uintptr_t argc, const uint8_t **argv){
+#endif
 
   #include <WITCH/PlatformOpen.h>
 
@@ -210,6 +246,9 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
   pile.rate_limit_ppspersrcip.last_refill_at = T_nowi();
 
   pile.kernel_bypass = true;
+  #ifdef set_use_dpdk
+    pile.use_dpdk = true;
+  #endif
 
   pile.force_gateway32 = false;
 
@@ -260,6 +299,9 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
       else if(!STR_n0cmp("prepeat", pstr)){ iarg += param_func_prepeat(&argv[iarg], &pile); }
       else if(!STR_n0cmp("ppspersrcip", pstr)){ iarg += param_func_ppspersrcip(&argv[iarg], &pile); }
       else if(!STR_n0cmp("kernel_bypass", pstr)){ iarg += param_func_kernel_bypass(&argv[iarg], &pile); }
+      #ifdef set_use_dpdk
+        else if(!STR_n0cmp("use_dpdk", pstr)){ iarg += param_func_use_dpdk(&argv[iarg], &pile); }
+      #endif
       else if(!STR_n0cmp("gateway32", pstr)){ iarg += param_func_gateway32(&argv[iarg], &pile); }
       else if(!STR_n0cmp("dstmac", pstr)){ iarg += param_func_dstmac(&argv[iarg], &pile); }
       else if(!STR_n0cmp("saddr", pstr)){ iarg += param_func_saddr(&argv[iarg], &pile); }
@@ -308,7 +350,13 @@ FUNC void main(uintptr_t argc, const uint8_t **argv){
 
   start_thingies(&pile);
 
-  _exit(0);
+  #if set_libc
+    return 0;
+  #else
+    _exit(0);
+  #endif
 }
 
-#include <WITCH/include/_start.h>
+#if !set_libc
+  #include <WITCH/include/_start.h>
+#endif

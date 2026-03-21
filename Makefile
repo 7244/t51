@@ -9,9 +9,12 @@ ARCH = AMD64
 
 LINKER = ld -no-pie -n --gc-sections $($(ARCH)_LINKER)
 
-COMPILER = cc
-COMPILER += -std=c99
-COMPILER += -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-parentheses -Wno-strict-aliasing
+COMPILER_CC = cc
+COMPILER_STD = -std=c99
+COMPILER_STD += -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-parentheses -Wno-strict-aliasing
+
+COMPILER = COMPILER_CC
+COMPILER += COMPILER_STD
 COMPILER += -fno-pic
 COMPILER += -fno-pie
 COMPILER += -nostdlib -fomit-frame-pointer -fno-stack-protector -ffreestanding -fno-asynchronous-unwind-tables -fdata-sections -ffunction-sections -Qn
@@ -31,8 +34,12 @@ release: _all
 _all: _compile _clean
 
 _compile:
+ifeq ($(use_dpdk),yes)
+	$(COMPILER_CC) $(COMPILER_STD) src/main.c -I/usr/include/dpdk -I/usr/include/x86_64-linux-gnu/dpdk/ -lrte_eal -lrte_ethdev -lrte_net_ixgbe -Dset_use_dpdk=1 -o $(OUTPUT)
+else
 	$(COMPILER) $(CFLAGS) src/main.c -o main.c.o && \
 	$(LINKER) main.c.o -o $(OUTPUT) || true
+endif
 
 _clean:
 	rm -f main.c.o

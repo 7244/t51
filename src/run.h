@@ -67,19 +67,10 @@ FUNC void run_thread(pile_t *pile){
   }
 
   if(pile->difacename != NULL){
-    NET_ifreq_t ifreq;
-    if(MEM_cstreu(pile->difacename) + 1 > sizeof(ifreq.ifr_name)){
-      _abort();
-    }
-    __builtin_memcpy(ifreq.ifr_name, pile->difacename, MEM_cstreu(pile->difacename) + 1);
-    if(NET_ctl3(&s, NET_SIOCGIFINDEX, &ifreq)){
-      _abort();
-    }
-
     NET_sockaddr_ll_t bind_addr = {
       .sll_family = NET_AF_PACKET,
       .sll_protocol = NET_hton16(NET_ETH_P_ALL),
-      .sll_ifindex = ifreq.ifr_ifindex
+      .sll_ifindex = NET_GetIFIndexByInterfaceName_cstr((const char *)pile->difacename)
     };
     if(NET_bind_raw(&s, (struct sockaddr*)&bind_addr, sizeof(bind_addr))) {
       _abort();
@@ -295,11 +286,50 @@ FUNC void run_thread(pile_t *pile){
 }
 
 FUNC void run_entry(pile_t *pile){
+  #ifdef set_use_dpdk
+    {
+      /* argc 0 gives error in some dpdk versions */
+      char *rte_argv = "";
+      int err = rte_eal_init(1, &rte_argv);
+      if(err){
+        _abort();
+      }
+
+      uint32_t dpdk_thread_count = rte_lcore_count();
+      uint32_t wanted_thread_count = pile->threads;
+      if(wanted_thread_count > dpdk_thread_count){
+        _abort();
+      }
+
+
+      sint32_t wanted_ifindex = NET_GetIFIndexByInterfaceName_cstr((const char *)pile->difacename);
+
+      uint16_t dpdk_interface_count = rte_eth_dev_count_avail();
+      uint16_t i_dpdk_interface = 0;
+      for(; i_dpdk_interface < dpdk_interface_count; i_dpdk_interface++){
+        struct rte_eth_dev_info info;
+        err = rte_eth_dev_info_get(i_dpdk_interface, &info);
+        if(err){
+          _abort();
+        }
+
+        if(info.if_index == (uint32_t)wanted_ifindex){
+          break;
+        }
+      }
+      if(i_dpdk_interface == dpdk_interface_count){
+        _abort();
+      }
+
+      /* TODO */
+      _abort();
+    }
+  #endif
+
   while(1){
     uint32_t ct = __atomic_add_fetch(&pile->current_thread, 1, __ATOMIC_SEQ_CST);
     if(ct >= pile->threads){
       run_thread(pile);
-
       syscall1(__NR_exit, 0);
       __unreachable();
     }
