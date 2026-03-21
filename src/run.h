@@ -302,22 +302,35 @@ FUNC void run_entry(pile_t *pile){
       }
 
 
-      sint32_t wanted_ifindex = NET_GetIFIndexByInterfaceName_cstr((const char *)pile->difacename);
+      const uint8_t *wanted_pci_name;
+      if(pile->pci_name != NULL){
+        wanted_pci_name = pile->pci_name;
+      }
+      else if(pile->difacename != NULL){
+        /* TODO */
+        _abort();
+      }
+      else{
+        /* TODO */
+        _abort();
+      }
 
       uint16_t dpdk_interface_count = rte_eth_dev_count_avail();
       uint16_t i_dpdk_interface = 0;
       for(; i_dpdk_interface < dpdk_interface_count; i_dpdk_interface++){
-        struct rte_eth_dev_info info;
-        err = rte_eth_dev_info_get(i_dpdk_interface, &info);
+        uint8_t name_buffer[RTE_ETH_NAME_MAX_LEN];
+        err = rte_eth_dev_get_name_by_port(i_dpdk_interface, (char *)name_buffer);
         if(err){
+          /* TODO */
           _abort();
         }
 
-        if(info.if_index == (uint32_t)wanted_ifindex){
+        if(!STR_cmp(wanted_pci_name, name_buffer)){
           break;
         }
       }
       if(i_dpdk_interface == dpdk_interface_count){
+        /* TODO */
         _abort();
       }
 
