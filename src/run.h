@@ -114,6 +114,16 @@ FUNC void run_entry(void *p_0){
         _abort();
       }
 
+      if(wanted_thread_count > eth_dev_info.max_tx_queues){
+        puts_literal("[WARNING] wanted_thread_count is above eth_dev_info.max_tx_queues. reducing wanted_thread_count to ");
+        utility_puts_number(eth_dev_info.max_tx_queues);
+        puts_literal(" from ");
+        utility_puts_number(wanted_thread_count);
+        wanted_thread_count = eth_dev_info.max_tx_queues;
+        puts_literal(".\n");
+        flush_print();
+      }
+
       uint16_t wanted_mtu = 1500;
 
       if(eth_dev_info.max_mtu < wanted_mtu){
@@ -193,8 +203,7 @@ FUNC void run_entry(void *p_0){
           given_threads++;
         }
       }
-      
-      printf("passed0 %u\n", wanted_thread_count);
+
       rte_eal_mp_wait_lcore();
 
       /* TODO */
