@@ -1,0 +1,230 @@
+FUNC void _run_thread_PACKET(){
+  NET_socket_t s;
+  sint32_t err = NET_socket2(NET_AF_PACKET, NET_SOCK_RAW, NET_ETH_P_ALL, &s);
+  if(err){
+    puts_literal("NET_socket2 fail. need root probably\n");
+    _exit(1);
+  }
+
+  if(NET_setsockopt(&s, NET_SOL_PACKET, NET_PACKET_VERSION, NET_TPACKET_V2)) {
+    _abort();
+  }
+
+  if(pile.difacename != NULL){
+    NET_sockaddr_ll_t bind_addr = {
+      .sll_family = NET_AF_PACKET,
+      .sll_protocol = NET_hton16(NET_ETH_P_ALL),
+      .sll_ifindex = NET_GetIFIndexByInterfaceName_cstr((const char *)pile.difacename)
+    };
+    if(NET_bind_raw(&s, (struct sockaddr*)&bind_addr, sizeof(bind_addr))) {
+      _abort();
+    }
+  }
+  else{
+    // implement this
+    _abort();
+
+    NET_addr4port_t difaceaddr4port;
+    difaceaddr4port.ip = pile.difaceip.ip;
+    difaceaddr4port.port = 0;
+  
+    if(NET_connect(&s, &difaceaddr4port)){
+      _abort();
+    }
+  }
+
+  const uintptr_t frame_size = 2048;
+
+  NET_tpacket_req_t tpacket_req = {
+    .tp_frame_size = frame_size,
+    .tp_frame_nr = 2048,
+    .tp_block_size = 4096,
+    .tp_block_nr = (2048 / (4096 / frame_size))
+  };
+  if(NET_setsockopt_raw(&s, NET_SOL_PACKET, NET_PACKET_TX_RING, &tpacket_req, sizeof(tpacket_req))){
+    _abort();
+  }
+
+  if(pile.kernel_bypass){
+    if(NET_setsockopt(&s, NET_SOL_PACKET, NET_PACKET_QDISC_BYPASS, 1) < 0){
+      _abort();
+    }
+  }
+
+  uintptr_t ring_size = tpacket_req.tp_block_size * tpacket_req.tp_block_nr;
+  void *ring = (void *)IO_mmap(NULL, ring_size, PROT_READ|PROT_WRITE, MAP_SHARED, s.fd.fd, 0);
+  if((uintptr_t)ring > (uintptr_t)-4096) {
+    _abort();
+  }
+
+  uint8_t data[0x800];
+
+  NET_machdr_t *machdr = (NET_machdr_t *)data;
+  NET_ipv4hdr_t *ipv4hdr = (NET_ipv4hdr_t *)&machdr[1];
+  NET_udphdr_t *udphdr = (NET_udphdr_t *)&ipv4hdr[1];
+  uint8_t *payload = (uint8_t *)&udphdr[1];
+
+  if((uintptr_t)payload - (uintptr_t)ipv4hdr + pile.payload_size > sizeof(data)){
+    _abort();
+  }
+
+  get_src_mac(&s, pile.difacename, machdr->src);
+  if(pile.force_dst_mac){
+    __builtin_memcpy(machdr->dst, pile.dst_mac, sizeof(pile.dst_mac));
+  }
+  else{
+    get_dst_mac(&s, pile.difacename, machdr->dst);
+  }
+
+  machdr->prot = 0x0008;
+
+  for(uint32_t i = 0; i < pile.payload_size; i++){
+    payload[i] = 0;
+  }
+
+  ipv4hdr->ihl = 5;
+  ipv4hdr->version = 4;
+  ipv4hdr->tos = 0;
+  ipv4hdr->tot_len = NET_hton16(sizeof(NET_ipv4hdr_t) + sizeof(NET_udphdr_t) + pile.payload_size);
+  ipv4hdr->id = NET_hton32(54321);
+  ipv4hdr->frag_off = 0;
+  ipv4hdr->ttl = 255;
+  ipv4hdr->protocol = NET_IPPROTO_UDP;
+  ipv4hdr->check = 0;
+  if(pile.source.prefix != 32){
+    ipv4hdr->saddr = NET_hton32(0);
+  }
+  else{
+    ipv4hdr->saddr = NET_hton32(pile.source.ip);
+  }
+  if(pile.target_addr.prefix != 32){
+    ipv4hdr->daddr = NET_hton32(0);
+  }
+  else{
+    ipv4hdr->daddr = NET_hton32(pile.target_addr.ip);
+  }
+
+  uint32_t ipv4check_pre = checksum_pre(ipv4hdr, sizeof(*ipv4hdr));
+
+  if(pile.rand_sport){
+    udphdr->source = NET_hton16(0);
+  }
+  else{
+    udphdr->source = NET_hton16(pile.sport);
+  }
+  if(pile.rand_dport){
+    udphdr->dest = NET_hton16(0);
+  }
+  else{
+    udphdr->dest = NET_hton16(pile.dport);
+  }
+  udphdr->len = NET_hton16(sizeof(*udphdr) + pile.payload_size);
+  udphdr->check = 0;
+
+  uint32_t udpcheck_pre = 0;
+  udpcheck_pre += checksum_pre(&ipv4hdr->saddr, sizeof(ipv4hdr->saddr));
+  udpcheck_pre += checksum_pre(&ipv4hdr->daddr, sizeof(ipv4hdr->daddr));
+  udpcheck_pre += NET_hton16(NET_IPPROTO_UDP);
+  udpcheck_pre += udphdr->len;
+  udpcheck_pre += checksum_pre(udphdr, sizeof(*udphdr) + pile.payload_size);
+
+  ipv4hdr->saddr = NET_hton32(pile.source.ip);
+  ipv4hdr->daddr = NET_hton32(pile.target_addr.ip);
+
+  uint64_t tpacket_index = 0;
+  while(1){
+    for(uintptr_t i = 0; i < tpacket_req.tp_frame_nr / 4; i++){
+      if(tpacket_index >= pile.threshold){
+        goto gt_threshold_done;
+      }
+
+      uint32_t ipv4check_pre_current = ipv4check_pre;
+  
+      if(pile.source.prefix != 32){
+        ipv4hdr->saddr = NET_ntoh32(ipv4hdr->saddr) - pile.source.ip;
+        ipv4hdr->saddr += 1;
+        if(pile.source.prefix != 0){
+          ipv4hdr->saddr &= ((uint32_t)1 << 32 - pile.source.prefix) - 1;
+        }
+        ipv4hdr->saddr = NET_hton32(ipv4hdr->saddr + pile.source.ip);
+        
+        ipv4check_pre_current += checksum_pre_single32(ipv4hdr->saddr);
+      }
+      if(pile.target_addr.prefix != 32){
+        ipv4hdr->daddr = NET_ntoh32(ipv4hdr->daddr) - pile.target_addr.ip;
+        ipv4hdr->daddr += 1;
+        if(pile.target_addr.prefix != 0){
+          ipv4hdr->daddr &= ((uint32_t)1 << 32 - pile.target_addr.prefix) - 1;
+        }
+        ipv4hdr->daddr = NET_hton32(ipv4hdr->daddr + pile.target_addr.ip);
+        
+        ipv4check_pre_current += checksum_pre_single32(ipv4hdr->daddr);
+      }
+  
+      ipv4hdr->check = checksum_final(ipv4check_pre_current);
+  
+  
+      uint32_t udpcheck_pre_current = udpcheck_pre;
+  
+      if(pile.source.prefix != 32){
+        udpcheck_pre_current += checksum_pre_single32(ipv4hdr->saddr);
+      }
+      if(pile.target_addr.prefix != 32){
+        udpcheck_pre_current += checksum_pre_single32(ipv4hdr->daddr);
+      }
+      if(pile.rand_sport){
+        udphdr->source++;
+        udpcheck_pre_current += checksum_pre_single16(udphdr->source);
+      }
+      if(pile.rand_dport){
+        udphdr->dest++;
+        udpcheck_pre_current += checksum_pre_single16(udphdr->dest);
+      }
+  
+  
+      udphdr->check = checksum_final(udpcheck_pre_current);
+  
+  
+      if(pile.ppspersrcip != (uint64_t)-1){
+        while(fast_limiter(
+          &pile.rate_limit_ppspersrcip.current,
+          &pile.rate_limit_ppspersrcip.last_refill_at,
+          1,
+          pile.ppspersrcip * ((uint64_t)1 << 32 - pile.source.prefix),
+          T_nowi()
+        )){
+          // TOOD relax
+        }
+      }
+
+      uint64_t tpacket_mod = tpacket_index % tpacket_req.tp_frame_nr;
+      tpacket_index++;
+
+      NET_tpacket2_hdr_t *tpacket2_hdr = (NET_tpacket2_hdr_t *)((uint8_t *)ring + tpacket_mod * tpacket_req.tp_frame_size);
+
+      gt_tp_status:;
+      uint32_t tp_status = __atomic_load_n(&tpacket2_hdr->tp_status, __ATOMIC_SEQ_CST);
+      if(tp_status != NET_TP_STATUS_AVAILABLE){
+          goto gt_tp_status;
+      }
+
+      void *pkt = (void *)((uint8_t *)tpacket2_hdr + NET_TPACKET_ALIGN(sizeof(NET_tpacket2_hdr_t)));
+
+      tpacket2_hdr->tp_len = sizeof(NET_machdr_t) + sizeof(NET_ipv4hdr_t) + sizeof(NET_udphdr_t) + pile.payload_size;
+
+      __builtin_memcpy(pkt, data, tpacket2_hdr->tp_len);
+
+      __atomic_store_n(&tpacket2_hdr->tp_status, NET_TP_STATUS_SEND_REQUEST, __ATOMIC_SEQ_CST);
+    }
+
+    if(IO_write(&s.fd, NULL, 0) < 0) {
+      _abort();
+    }
+  }
+
+  gt_threshold_done:;
+
+  if(IO_write(&s.fd, NULL, 0) < 0) {
+    _abort();
+  }
+}

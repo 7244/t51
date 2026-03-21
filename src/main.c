@@ -76,6 +76,7 @@ typedef struct{
 
   NET_socket_t s;
 }pile_t;
+pile_t pile;
 
 #include "run.h"
 
@@ -118,107 +119,107 @@ FUNC void print_help(){
   _exit(0);
 }
 
-FUNC uintptr_t param_func_threads(const uint8_t **arg, pile_t *pile){
+FUNC uintptr_t param_func_threads(const uint8_t **arg){
   uintptr_t index = 0;
-  pile->threads = STR_psu64_iguess_abort(arg[0], &index);
+  pile.threads = STR_psu64_iguess_abort(arg[0], &index);
 
   return 1;
 }
 
-FUNC uintptr_t param_func_threshold(const uint8_t **arg, pile_t *pile){
+FUNC uintptr_t param_func_threshold(const uint8_t **arg){
   uintptr_t index = 0;
-  pile->threshold = STR_psu64_iguess_abort(arg[0], &index);
+  pile.threshold = STR_psu64_iguess_abort(arg[0], &index);
 
   return 1;
 }
 
-FUNC uintptr_t param_func_prepeat(const uint8_t **arg, pile_t *pile){
+FUNC uintptr_t param_func_prepeat(const uint8_t **arg){
   uintptr_t index = 0;
-  pile->prepeat = STR_psu64_iguess_abort(arg[0], &index);
+  pile.prepeat = STR_psu64_iguess_abort(arg[0], &index);
 
   return 1;
 }
 
-FUNC uintptr_t param_func_ppspersrcip(const uint8_t **arg, pile_t *pile){
+FUNC uintptr_t param_func_ppspersrcip(const uint8_t **arg){
   uintptr_t index = 0;
-  pile->ppspersrcip = STR_psu64_iguess_abort(arg[0], &index);
+  pile.ppspersrcip = STR_psu64_iguess_abort(arg[0], &index);
 
   return 1;
 }
 
-FUNC uintptr_t param_func_kernel_bypass(const uint8_t **arg, pile_t *pile){
-  pile->kernel_bypass = STR_ParseCStringAsBool_abort(arg[0]);
+FUNC uintptr_t param_func_kernel_bypass(const uint8_t **arg){
+  pile.kernel_bypass = STR_ParseCStringAsBool_abort(arg[0]);
 
   return 1;
 }
 
 #ifdef set_use_dpdk
-  FUNC uintptr_t param_func_use_dpdk(const uint8_t **arg, pile_t *pile){
-    pile->use_dpdk = STR_ParseCStringAsBool_abort(arg[0]);
+  FUNC uintptr_t param_func_use_dpdk(const uint8_t **arg){
+    pile.use_dpdk = STR_ParseCStringAsBool_abort(arg[0]);
 
     return 1;
   }
 #endif
 
-FUNC uintptr_t param_func_gateway32(const uint8_t **arg, pile_t *pile){
-  pile->force_gateway32 = true;
+FUNC uintptr_t param_func_gateway32(const uint8_t **arg){
+  pile.force_gateway32 = true;
 
   /* TODO NET_ipv4_from_string is not safe function */
-  pile->gateway32 = NET_ipv4_from_string(arg[0]);
+  pile.gateway32 = NET_ipv4_from_string(arg[0]);
 
   return 1;
 }
 
-FUNC uintptr_t param_func_dstmac(const uint8_t **arg, pile_t *pile){
-  pile->force_dst_mac = true;
+FUNC uintptr_t param_func_dstmac(const uint8_t **arg){
+  pile.force_dst_mac = true;
 
-  NET_mac6_from_string(pile->dst_mac, arg[0]);
+  NET_mac6_from_string(pile.dst_mac, arg[0]);
 
   return 1;
 }
 
-FUNC uintptr_t param_func_port(const uint8_t **arg, pile_t *pile, bool s_or_d){
+FUNC uintptr_t param_func_port(const uint8_t **arg, bool s_or_d){
   uintptr_t index = 0;
   if(s_or_d){
-    pile->rand_sport = 0;
-    pile->sport = STR_psu16_iguess_abort(arg[0], &index);
+    pile.rand_sport = 0;
+    pile.sport = STR_psu16_iguess_abort(arg[0], &index);
   }
   else{
-    pile->rand_dport = 0;
-    pile->dport = STR_psu16_iguess_abort(arg[0], &index);
+    pile.rand_dport = 0;
+    pile.dport = STR_psu16_iguess_abort(arg[0], &index);
   }
   return 1;
 }
 
-FUNC uintptr_t param_func_psize(const uint8_t **arg, pile_t *pile){
+FUNC uintptr_t param_func_psize(const uint8_t **arg){
   uintptr_t index = 0;
-  pile->payload_size = STR_psu32_iguess_abort(arg[0], &index);
+  pile.payload_size = STR_psu32_iguess_abort(arg[0], &index);
 
   return 1;
 }
 
-FUNC uintptr_t param_func_saddr(const uint8_t **arg, pile_t *pile){
-  if(NET_addr4prefix_from_string(arg[0], &pile->source)){
+FUNC uintptr_t param_func_saddr(const uint8_t **arg){
+  if(NET_addr4prefix_from_string(arg[0], &pile.source)){
     _abort();
   }
 
   return 1;
 }
 
-FUNC uintptr_t param_func_diface(const uint8_t **arg, pile_t *pile){
-  pile->difacename = arg[0];
+FUNC uintptr_t param_func_diface(const uint8_t **arg){
+  pile.difacename = arg[0];
 
   return 1;
 }
 
-FUNC uintptr_t param_func_pci(const uint8_t **arg, pile_t *pile){
-  pile->pci_name = arg[0];
+FUNC uintptr_t param_func_pci(const uint8_t **arg){
+  pile.pci_name = arg[0];
 
   return 1;
 }
 
-FUNC uintptr_t param_func_difaceip(const uint8_t **arg, pile_t *pile){
-  if(NET_addr4prefix_from_string(arg[0], &pile->difaceip)){
+FUNC uintptr_t param_func_difaceip(const uint8_t **arg){
+  if(NET_addr4prefix_from_string(arg[0], &pile.difaceip)){
     _abort();
   }
 
@@ -289,7 +290,7 @@ FUNC uintptr_t param_func_difaceip(const uint8_t **arg, pile_t *pile){
       }
 
       if(arg[1] == 'h'){ print_help(); }
-      else if(arg[1] == 's'){ iarg += param_func_saddr(&argv[iarg], &pile); }
+      else if(arg[1] == 's'){ iarg += param_func_saddr(&argv[iarg]); }
       else{
         puts_literal("error: unexpected argument '-");
         puts_char_repeat(arg[1], 1);
@@ -302,24 +303,24 @@ FUNC uintptr_t param_func_difaceip(const uint8_t **arg, pile_t *pile){
       const uint8_t *pstr = &arg[2];
 
       if(!STR_n0cmp("help", pstr)){ print_help(); }
-      else if(!STR_n0cmp("threads", pstr)){ iarg += param_func_threads(&argv[iarg], &pile); }
-      else if(!STR_n0cmp("threshold", pstr)){ iarg += param_func_threshold(&argv[iarg], &pile); }
+      else if(!STR_n0cmp("threads", pstr)){ iarg += param_func_threads(&argv[iarg]); }
+      else if(!STR_n0cmp("threshold", pstr)){ iarg += param_func_threshold(&argv[iarg]); }
       else if(!STR_n0cmp("flood", pstr)){ pile.threshold = (uint64_t)-1; }
-      else if(!STR_n0cmp("prepeat", pstr)){ iarg += param_func_prepeat(&argv[iarg], &pile); }
-      else if(!STR_n0cmp("ppspersrcip", pstr)){ iarg += param_func_ppspersrcip(&argv[iarg], &pile); }
-      else if(!STR_n0cmp("kernel_bypass", pstr)){ iarg += param_func_kernel_bypass(&argv[iarg], &pile); }
+      else if(!STR_n0cmp("prepeat", pstr)){ iarg += param_func_prepeat(&argv[iarg]); }
+      else if(!STR_n0cmp("ppspersrcip", pstr)){ iarg += param_func_ppspersrcip(&argv[iarg]); }
+      else if(!STR_n0cmp("kernel_bypass", pstr)){ iarg += param_func_kernel_bypass(&argv[iarg]); }
       #ifdef set_use_dpdk
-        else if(!STR_n0cmp("use_dpdk", pstr)){ iarg += param_func_use_dpdk(&argv[iarg], &pile); }
+        else if(!STR_n0cmp("use_dpdk", pstr)){ iarg += param_func_use_dpdk(&argv[iarg]); }
       #endif
-      else if(!STR_n0cmp("gateway32", pstr)){ iarg += param_func_gateway32(&argv[iarg], &pile); }
-      else if(!STR_n0cmp("dstmac", pstr)){ iarg += param_func_dstmac(&argv[iarg], &pile); }
-      else if(!STR_n0cmp("saddr", pstr)){ iarg += param_func_saddr(&argv[iarg], &pile); }
-      else if(!STR_n0cmp("diface", pstr)){ iarg += param_func_diface(&argv[iarg], &pile); }
-      else if(!STR_n0cmp("pci", pstr)){ iarg += param_func_pci(&argv[iarg], &pile); }
-      else if(!STR_n0cmp("difaceip", pstr)){ iarg += param_func_difaceip(&argv[iarg], &pile); }
-      else if(!STR_n0cmp("sport", pstr)){ iarg += param_func_port(&argv[iarg], &pile, 1); }
-      else if(!STR_n0cmp("dport", pstr)){ iarg += param_func_port(&argv[iarg], &pile, 0); }
-      else if(!STR_n0cmp("psize", pstr)){ iarg += param_func_psize(&argv[iarg], &pile); }
+      else if(!STR_n0cmp("gateway32", pstr)){ iarg += param_func_gateway32(&argv[iarg]); }
+      else if(!STR_n0cmp("dstmac", pstr)){ iarg += param_func_dstmac(&argv[iarg]); }
+      else if(!STR_n0cmp("saddr", pstr)){ iarg += param_func_saddr(&argv[iarg]); }
+      else if(!STR_n0cmp("diface", pstr)){ iarg += param_func_diface(&argv[iarg]); }
+      else if(!STR_n0cmp("pci", pstr)){ iarg += param_func_pci(&argv[iarg]); }
+      else if(!STR_n0cmp("difaceip", pstr)){ iarg += param_func_difaceip(&argv[iarg]); }
+      else if(!STR_n0cmp("sport", pstr)){ iarg += param_func_port(&argv[iarg], 1); }
+      else if(!STR_n0cmp("dport", pstr)){ iarg += param_func_port(&argv[iarg], 0); }
+      else if(!STR_n0cmp("psize", pstr)){ iarg += param_func_psize(&argv[iarg]); }
       else{
         puts_literal("error: unexpected argument '");
         puts_size(pstr, MEM_cstreu(pstr));
@@ -358,7 +359,7 @@ FUNC uintptr_t param_func_difaceip(const uint8_t **arg, pile_t *pile){
 
   utility_print_setfd(STDOUT);
 
-  start_thingies(&pile);
+  run_entry(NULL);
 
   #if set_libc
     return 0;

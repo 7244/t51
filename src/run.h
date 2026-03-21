@@ -39,11 +39,11 @@ FUNC void get_src_mac(NET_socket_t *sock, const void *ifname, uint8_t *mac){
   __builtin_memcpy(mac, ifr.ifr_hwaddr.sa_data, 6);
 }
 
-FUNC void get_dst_mac(pile_t *pile, NET_socket_t *sock, const void *ifname, uint8_t *mac) {
+FUNC void get_dst_mac(NET_socket_t *sock, const void *ifname, uint8_t *mac) {
   sint32_t err;
 
-  if(pile->force_gateway32){
-    err = NET_GetMacAddressByGateway32_ifname_cstr(mac, pile->gateway32, ifname);
+  if(pile.force_gateway32){
+    err = NET_GetMacAddressByGateway32_ifname_cstr(mac, pile.gateway32, ifname);
   }
   else{
     err = NET_GetDefaultRouteMacAddress_ifname_cstr(mac, ifname);
@@ -54,238 +54,12 @@ FUNC void get_dst_mac(pile_t *pile, NET_socket_t *sock, const void *ifname, uint
   }
 }
 
-FUNC void run_thread(pile_t *pile){
-  NET_socket_t s;
-  sint32_t err = NET_socket2(NET_AF_PACKET, NET_SOCK_RAW, NET_ETH_P_ALL, &s);
-  if(err){
-    puts_literal("NET_socket2 fail. need root probably\n");
-    _exit(1);
-  }
+#include "_run_thread_PACKET.h"
+#include "_run_thread_dpdk.h"
 
-  if(NET_setsockopt(&s, NET_SOL_PACKET, NET_PACKET_VERSION, NET_TPACKET_V2)) {
-    _abort();
-  }
+FUNC void run_entry(void *p_0){
+  (void)p_0;
 
-  if(pile->difacename != NULL){
-    NET_sockaddr_ll_t bind_addr = {
-      .sll_family = NET_AF_PACKET,
-      .sll_protocol = NET_hton16(NET_ETH_P_ALL),
-      .sll_ifindex = NET_GetIFIndexByInterfaceName_cstr((const char *)pile->difacename)
-    };
-    if(NET_bind_raw(&s, (struct sockaddr*)&bind_addr, sizeof(bind_addr))) {
-      _abort();
-    }
-  }
-  else{
-    // implement this
-    _abort();
-
-    NET_addr4port_t difaceaddr4port;
-    difaceaddr4port.ip = pile->difaceip.ip;
-    difaceaddr4port.port = 0;
-  
-    if(NET_connect(&s, &difaceaddr4port)){
-      _abort();
-    }
-  }
-
-  const uintptr_t frame_size = 2048;
-
-  NET_tpacket_req_t tpacket_req = {
-    .tp_frame_size = frame_size,
-    .tp_frame_nr = 2048,
-    .tp_block_size = 4096,
-    .tp_block_nr = (2048 / (4096 / frame_size))
-  };
-  if(NET_setsockopt_raw(&s, NET_SOL_PACKET, NET_PACKET_TX_RING, &tpacket_req, sizeof(tpacket_req))){
-    _abort();
-  }
-
-  if(pile->kernel_bypass){
-    if(NET_setsockopt(&s, NET_SOL_PACKET, NET_PACKET_QDISC_BYPASS, 1) < 0){
-      _abort();
-    }
-  }
-
-  uintptr_t ring_size = tpacket_req.tp_block_size * tpacket_req.tp_block_nr;
-  void *ring = (void *)IO_mmap(NULL, ring_size, PROT_READ|PROT_WRITE, MAP_SHARED, s.fd.fd, 0);
-  if((uintptr_t)ring > (uintptr_t)-4096) {
-    _abort();
-  }
-
-  uint8_t data[0x800];
-
-  NET_machdr_t *machdr = (NET_machdr_t *)data;
-  NET_ipv4hdr_t *ipv4hdr = (NET_ipv4hdr_t *)&machdr[1];
-  NET_udphdr_t *udphdr = (NET_udphdr_t *)&ipv4hdr[1];
-  uint8_t *payload = (uint8_t *)&udphdr[1];
-
-  if((uintptr_t)payload - (uintptr_t)ipv4hdr + pile->payload_size > sizeof(data)){
-    _abort();
-  }
-
-  get_src_mac(&s, pile->difacename, machdr->src);
-  if(pile->force_dst_mac){
-    __builtin_memcpy(machdr->dst, pile->dst_mac, sizeof(pile->dst_mac));
-  }
-  else{
-    get_dst_mac(pile, &s, pile->difacename, machdr->dst);
-  }
-
-  machdr->prot = 0x0008;
-
-  for(uint32_t i = 0; i < pile->payload_size; i++){
-    payload[i] = 0;
-  }
-
-  ipv4hdr->ihl = 5;
-  ipv4hdr->version = 4;
-  ipv4hdr->tos = 0;
-  ipv4hdr->tot_len = NET_hton16(sizeof(NET_ipv4hdr_t) + sizeof(NET_udphdr_t) + pile->payload_size);
-  ipv4hdr->id = NET_hton32(54321);
-  ipv4hdr->frag_off = 0;
-  ipv4hdr->ttl = 255;
-  ipv4hdr->protocol = NET_IPPROTO_UDP;
-  ipv4hdr->check = 0;
-  if(pile->source.prefix != 32){
-    ipv4hdr->saddr = NET_hton32(0);
-  }
-  else{
-    ipv4hdr->saddr = NET_hton32(pile->source.ip);
-  }
-  if(pile->target_addr.prefix != 32){
-    ipv4hdr->daddr = NET_hton32(0);
-  }
-  else{
-    ipv4hdr->daddr = NET_hton32(pile->target_addr.ip);
-  }
-
-  uint32_t ipv4check_pre = checksum_pre(ipv4hdr, sizeof(*ipv4hdr));
-
-  if(pile->rand_sport){
-    udphdr->source = NET_hton16(0);
-  }
-  else{
-    udphdr->source = NET_hton16(pile->sport);
-  }
-  if(pile->rand_dport){
-    udphdr->dest = NET_hton16(0);
-  }
-  else{
-    udphdr->dest = NET_hton16(pile->dport);
-  }
-  udphdr->len = NET_hton16(sizeof(*udphdr) + pile->payload_size);
-  udphdr->check = 0;
-
-  uint32_t udpcheck_pre = 0;
-  udpcheck_pre += checksum_pre(&ipv4hdr->saddr, sizeof(ipv4hdr->saddr));
-  udpcheck_pre += checksum_pre(&ipv4hdr->daddr, sizeof(ipv4hdr->daddr));
-  udpcheck_pre += NET_hton16(NET_IPPROTO_UDP);
-  udpcheck_pre += udphdr->len;
-  udpcheck_pre += checksum_pre(udphdr, sizeof(*udphdr) + pile->payload_size);
-
-  ipv4hdr->saddr = NET_hton32(pile->source.ip);
-  ipv4hdr->daddr = NET_hton32(pile->target_addr.ip);
-
-  uint64_t tpacket_index = 0;
-  while(1){
-    for(uintptr_t i = 0; i < tpacket_req.tp_frame_nr / 4; i++){
-      if(tpacket_index >= pile->threshold){
-        goto gt_threshold_done;
-      }
-
-      uint32_t ipv4check_pre_current = ipv4check_pre;
-  
-      if(pile->source.prefix != 32){
-        ipv4hdr->saddr = NET_ntoh32(ipv4hdr->saddr) - pile->source.ip;
-        ipv4hdr->saddr += 1;
-        if(pile->source.prefix != 0){
-          ipv4hdr->saddr &= ((uint32_t)1 << 32 - pile->source.prefix) - 1;
-        }
-        ipv4hdr->saddr = NET_hton32(ipv4hdr->saddr + pile->source.ip);
-        
-        ipv4check_pre_current += checksum_pre_single32(ipv4hdr->saddr);
-      }
-      if(pile->target_addr.prefix != 32){
-        ipv4hdr->daddr = NET_ntoh32(ipv4hdr->daddr) - pile->target_addr.ip;
-        ipv4hdr->daddr += 1;
-        if(pile->target_addr.prefix != 0){
-          ipv4hdr->daddr &= ((uint32_t)1 << 32 - pile->target_addr.prefix) - 1;
-        }
-        ipv4hdr->daddr = NET_hton32(ipv4hdr->daddr + pile->target_addr.ip);
-        
-        ipv4check_pre_current += checksum_pre_single32(ipv4hdr->daddr);
-      }
-  
-      ipv4hdr->check = checksum_final(ipv4check_pre_current);
-  
-  
-      uint32_t udpcheck_pre_current = udpcheck_pre;
-  
-      if(pile->source.prefix != 32){
-        udpcheck_pre_current += checksum_pre_single32(ipv4hdr->saddr);
-      }
-      if(pile->target_addr.prefix != 32){
-        udpcheck_pre_current += checksum_pre_single32(ipv4hdr->daddr);
-      }
-      if(pile->rand_sport){
-        udphdr->source++;
-        udpcheck_pre_current += checksum_pre_single16(udphdr->source);
-      }
-      if(pile->rand_dport){
-        udphdr->dest++;
-        udpcheck_pre_current += checksum_pre_single16(udphdr->dest);
-      }
-  
-  
-      udphdr->check = checksum_final(udpcheck_pre_current);
-  
-  
-      if(pile->ppspersrcip != (uint64_t)-1){
-        while(fast_limiter(
-          &pile->rate_limit_ppspersrcip.current,
-          &pile->rate_limit_ppspersrcip.last_refill_at,
-          1,
-          pile->ppspersrcip * ((uint64_t)1 << 32 - pile->source.prefix),
-          T_nowi()
-        )){
-          // TOOD relax
-        }
-      }
-
-      uint64_t tpacket_mod = tpacket_index % tpacket_req.tp_frame_nr;
-      tpacket_index++;
-
-      NET_tpacket2_hdr_t *tpacket2_hdr = (NET_tpacket2_hdr_t *)((uint8_t *)ring + tpacket_mod * tpacket_req.tp_frame_size);
-
-      gt_tp_status:;
-      uint32_t tp_status = __atomic_load_n(&tpacket2_hdr->tp_status, __ATOMIC_SEQ_CST);
-      if(tp_status != NET_TP_STATUS_AVAILABLE){
-          goto gt_tp_status;
-      }
-
-      void *pkt = (void *)((uint8_t *)tpacket2_hdr + NET_TPACKET_ALIGN(sizeof(NET_tpacket2_hdr_t)));
-
-      tpacket2_hdr->tp_len = sizeof(NET_machdr_t) + sizeof(NET_ipv4hdr_t) + sizeof(NET_udphdr_t) + pile->payload_size;
-
-      __builtin_memcpy(pkt, data, tpacket2_hdr->tp_len);
-
-      __atomic_store_n(&tpacket2_hdr->tp_status, NET_TP_STATUS_SEND_REQUEST, __ATOMIC_SEQ_CST);
-    }
-
-    if(IO_write(&s.fd, NULL, 0) < 0) {
-      _abort();
-    }
-  }
-
-  gt_threshold_done:;
-
-  if(IO_write(&s.fd, NULL, 0) < 0) {
-    _abort();
-  }
-}
-
-FUNC void run_entry(pile_t *pile){
   #ifdef set_use_dpdk
     {
       /* argc 0 gives error in some dpdk versions */
@@ -296,17 +70,17 @@ FUNC void run_entry(pile_t *pile){
       }
 
       uint32_t dpdk_thread_count = rte_lcore_count();
-      uint32_t wanted_thread_count = pile->threads;
+      uint32_t wanted_thread_count = pile.threads;
       if(wanted_thread_count > dpdk_thread_count){
         _abort();
       }
 
 
       const uint8_t *wanted_pci_name;
-      if(pile->pci_name != NULL){
-        wanted_pci_name = pile->pci_name;
+      if(pile.pci_name != NULL){
+        wanted_pci_name = pile.pci_name;
       }
-      else if(pile->difacename != NULL){
+      else if(pile.difacename != NULL){
         /* TODO */
         _abort();
       }
@@ -334,24 +108,109 @@ FUNC void run_entry(pile_t *pile){
         _abort();
       }
 
+      struct rte_eth_dev_info eth_dev_info;
+      err = rte_eth_dev_info_get(i_dpdk_interface, &eth_dev_info);
+      if(err){
+        _abort();
+      }
+
+      uint16_t wanted_mtu = 1500;
+
+      if(eth_dev_info.max_mtu < wanted_mtu){
+        _abort();
+      }
+
+      struct rte_eth_conf eth_conf = (struct rte_eth_conf){
+        .link_speeds = RTE_ETH_LINK_SPEED_AUTONEG,
+        .rxmode = (struct rte_eth_rxmode){
+          .mq_mode = RTE_ETH_MQ_RX_NONE,
+          .mtu = wanted_mtu,
+          .max_lro_pkt_size = eth_dev_info.max_lro_pkt_size,
+          .offloads = 0
+        },
+        .txmode = (struct rte_eth_txmode){
+          .mq_mode = RTE_ETH_MQ_TX_NONE,
+          .offloads = 0
+        },
+        .lpbk_mode = 0,
+        .dcb_capability_en = 0,
+        .intr_conf = (struct rte_eth_intr_conf){
+          .lsc = 0,
+          .rxq = 0,
+          .rmv = 0
+        }
+      };
+      err = rte_eth_dev_configure(i_dpdk_interface, 1, wanted_thread_count, &eth_conf);
+      if(err){
+        _abort();
+      }
+
+      struct rte_mempool *mempool = rte_pktmbuf_pool_create(
+        "mempool",
+        8191,
+        256,
+        0,
+        RTE_MBUF_DEFAULT_BUF_SIZE,
+        rte_socket_id()
+      );
+      if(mempool == NULL){
+        _abort();
+      }
+
+      err = rte_eth_rx_queue_setup(i_dpdk_interface, 0, 512, rte_eth_dev_socket_id(i_dpdk_interface), NULL, mempool);
+      if(err){
+        _abort();
+      }
+
+      for(uint32_t ith = 0; ith < wanted_thread_count; ith++){
+        err = rte_eth_tx_queue_setup(i_dpdk_interface, ith, 512, rte_eth_dev_socket_id(i_dpdk_interface), NULL);
+        if(err){
+          _abort();
+        }
+      }
+
+      err = rte_eth_dev_start(i_dpdk_interface);
+      if(err){
+        _abort();
+      }
+
+      #if 0
+      err = rte_eth_promiscuous_enable(i_dpdk_interface);
+      if(err){
+        _abort();
+      }
+      #endif
+
+
+      uint32_t given_threads = 0;
+      uint32_t lcore_id;
+      RTE_LCORE_FOREACH_WORKER(lcore_id){
+        if(given_threads < wanted_thread_count){
+          err = rte_eal_remote_launch(_run_thread_dpdk, &i_dpdk_interface, lcore_id);
+          if(err){
+            _abort();
+          }
+          given_threads++;
+        }
+      }
+      
+      printf("passed0 %u\n", wanted_thread_count);
+      rte_eal_mp_wait_lcore();
+
       /* TODO */
       _abort();
     }
   #endif
 
   while(1){
-    uint32_t ct = __atomic_add_fetch(&pile->current_thread, 1, __ATOMIC_SEQ_CST);
-    if(ct >= pile->threads){
-      run_thread(pile);
+    uint32_t ct = __atomic_add_fetch(&pile.current_thread, 1, __ATOMIC_SEQ_CST);
+    if(ct >= pile.threads){
+      _run_thread_PACKET();
       syscall1(__NR_exit, 0);
       __unreachable();
     }
-    if(TH_newthread_orphan((void (*)(void*))run_entry, pile) < 0){
+    if(TH_newthread_orphan((void (*)(void*))run_entry, NULL) < 0){
       __abort();
     }
   }
-}
-
-FUNC void start_thingies(pile_t *pile){
-  run_entry(pile);
 }
