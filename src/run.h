@@ -190,6 +190,8 @@ FUNC void run_entry(void *p_0){
       }
       #endif
 
+      pile.dpdk.given_worker_queues = 0;
+      __flush_compiler_variable_rw(pile.dpdk.given_worker_queues);
 
       uint32_t given_threads = 0;
       uint32_t lcore_id;

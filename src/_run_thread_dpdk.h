@@ -2,7 +2,7 @@ static int _run_thread_dpdk(void *p_0){
   uint16_t i_dpdk_interface = pile.dpdk.i_dpdk_interface;
   struct rte_mempool *mempool = pile.dpdk.mempool;
 
-  unsigned lcore_id = rte_lcore_id();
+  uint32_t tx_queue_index = __atomic_fetch_add(&pile.dpdk.given_worker_queues, 1, __ATOMIC_SEQ_CST);
 
   struct rte_mbuf *mbuf[32];
 
@@ -28,7 +28,7 @@ static int _run_thread_dpdk(void *p_0){
       mbuf[i]->pkt_len = final_size;
     }
 
-    uint32_t sent = rte_eth_tx_burst(i_dpdk_interface, lcore_id, mbuf, sizeof(mbuf) / sizeof(mbuf[0]));
+    uint32_t sent = rte_eth_tx_burst(i_dpdk_interface, tx_queue_index, mbuf, sizeof(mbuf) / sizeof(mbuf[0]));
 
     for(uint32_t i = sent; i < sizeof(mbuf) / sizeof(mbuf[0]); i++){
       rte_pktmbuf_free(mbuf[i]);
