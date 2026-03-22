@@ -1,13 +1,43 @@
+static void run_thread_common_get_macs(uint8_t *src_mac_addr, uint8_t *dst_mac_addr){
+  if(pile.difacename != NULL){
+    get_ifname_src_mac_cstr(pile.difacename, src_mac_addr);
+  }
+  else if(pile.pci_name != NULL){
+    if(0){}
+    #ifdef set_use_dpdk
+      else if(pile.use_dpdk){
+        struct rte_ether_addr rte_ether_addr;
+        rte_eth_macaddr_get(pile.dpdk.i_dpdk_interface, &rte_ether_addr);
+        __builtin_memcpy(src_mac_addr, rte_ether_addr.addr_bytes, 6);
+      }
+    #endif
+    else{
+      /* TOOD */
+      _abort();
+    }
+  }
+
+  if(pile.force_dst_mac){
+    __builtin_memcpy(dst_mac_addr, pile.dst_mac, sizeof(pile.dst_mac));
+  }
+  else if(pile.difacename != NULL){
+    get_ifname_dst_mac_cstr(pile.difacename, dst_mac_addr);
+  }
+  else if(pile.dst_mac_from_ifname != NULL){
+    get_ifname_dst_mac_cstr(pile.dst_mac_from_ifname, dst_mac_addr);
+  }
+  else if(pile.pci_name != NULL){
+    /* TOOD convert pci to interface then get it */
+    _abort();
+  }
+  else{
+    _abort();
+  }
+}
 #define run_thread_common_get_macs() \
   uint8_t src_mac_addr[6]; \
   uint8_t dst_mac_addr[6]; \
-  get_src_mac(pile.difacename, src_mac_addr); \
-  if(pile.force_dst_mac){ \
-    __builtin_memcpy(dst_mac_addr, pile.dst_mac, sizeof(pile.dst_mac)); \
-  } \
-  else{ \
-    get_dst_mac(pile.difacename, dst_mac_addr); \
-  }
+  run_thread_common_get_macs(src_mac_addr, dst_mac_addr);
 
 #define run_thread_common_set_packet_initial(data, data_size) \
   NET_machdr_t *machdr = (NET_machdr_t *)(data); \

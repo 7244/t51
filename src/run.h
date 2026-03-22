@@ -28,13 +28,13 @@ FUNC uint16_t checksum_final(uint32_t pre){
   return ~(uint16_t)pre;
 }
 
-FUNC void get_src_mac(const void *ifname, uint8_t *mac){
+FUNC void get_ifname_src_mac_cstr(const void *ifname, uint8_t *mac){
   if(NET_GetSRCMACFromIFName_cstr((const char *)ifname, mac)){
     _abort();
   }
 }
 
-FUNC void get_dst_mac(const void *ifname, uint8_t *mac) {
+FUNC void get_ifname_dst_mac_cstr(const void *ifname, uint8_t *mac) {
   sint32_t err;
 
   if(pile.force_gateway32){

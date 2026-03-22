@@ -70,6 +70,7 @@ typedef struct{
   NET_addr4prefix_t source;
 
   const uint8_t *difacename;
+  const uint8_t *dst_mac_from_ifname;
   const uint8_t *pci_name;
   NET_addr4prefix_t difaceip;
 
@@ -109,10 +110,11 @@ FUNC void print_help(){
     "  -h, --help                Print help\n"
     "\n"
     "IP Options:\n"
-    "  -s, --saddr ADDR     IP source IP address             (default 0.0.0.0/0)\n"
-    "      --difaceip ADDR  Destination interface IP address (default target_addr)\n"
-    "      --diface NAME    Destination interface name\n"
-    "      --pci ADDR       PCI address to send packets from\n"
+    "  -s, --saddr ADDR                IP source IP address             (default 0.0.0.0/0)\n"
+    "      --difaceip ADDR             Destination interface IP address (default target_addr)\n"
+    "      --diface NAME               Destination interface name\n"
+    "      --pci ADDR                  PCI address to send packets from\n"
+    "      --dst_mac_from_ifname NAME  Get destination MAC address from specific interface\n"
     "\n"
     "DCCP/TCP/UDP Options:\n"
     "      --sport NUM  source port                      (default RANDOM)\n"
@@ -216,6 +218,12 @@ FUNC uintptr_t param_func_diface(const uint8_t **arg){
   return 1;
 }
 
+FUNC uintptr_t param_func_dst_mac_from_ifname(const uint8_t **arg){
+  pile.dst_mac_from_ifname = arg[0];
+
+  return 1;
+}
+
 FUNC uintptr_t param_func_pci(const uint8_t **arg){
   pile.pci_name = arg[0];
 
@@ -242,8 +250,6 @@ FUNC uintptr_t param_func_difaceip(const uint8_t **arg){
   #include <WITCH/PlatformOpen.h>
 
   utility_init_print();
-
-  pile_t pile;
 
   pile.target_addr.ip = 0;
   pile.target_addr.prefix = 33;
@@ -320,6 +326,7 @@ FUNC uintptr_t param_func_difaceip(const uint8_t **arg){
       else if(!STR_n0cmp("dstmac", pstr)){ iarg += param_func_dstmac(&argv[iarg]); }
       else if(!STR_n0cmp("saddr", pstr)){ iarg += param_func_saddr(&argv[iarg]); }
       else if(!STR_n0cmp("diface", pstr)){ iarg += param_func_diface(&argv[iarg]); }
+      else if(!STR_n0cmp("dst_mac_from_ifname", pstr)){ iarg += param_func_dst_mac_from_ifname(&argv[iarg]); }
       else if(!STR_n0cmp("pci", pstr)){ iarg += param_func_pci(&argv[iarg]); }
       else if(!STR_n0cmp("difaceip", pstr)){ iarg += param_func_difaceip(&argv[iarg]); }
       else if(!STR_n0cmp("sport", pstr)){ iarg += param_func_port(&argv[iarg], 1); }
