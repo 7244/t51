@@ -28,18 +28,13 @@ FUNC uint16_t checksum_final(uint32_t pre){
   return ~(uint16_t)pre;
 }
 
-FUNC void get_src_mac(NET_socket_t *sock, const void *ifname, uint8_t *mac){
-  NET_ifreq_t ifr;
-  __builtin_memcpy(ifr.ifr_name, ifname, MEM_cstreu(ifname) + 1);
-
-  if(NET_ctl3(sock, NET_SIOCGIFHWADDR, &ifr) < 0) {
+FUNC void get_src_mac(const void *ifname, uint8_t *mac){
+  if(NET_GetSRCMACFromIFName_cstr((const char *)ifname, mac)){
     _abort();
   }
-
-  __builtin_memcpy(mac, ifr.ifr_hwaddr.sa_data, 6);
 }
 
-FUNC void get_dst_mac(NET_socket_t *sock, const void *ifname, uint8_t *mac) {
+FUNC void get_dst_mac(const void *ifname, uint8_t *mac) {
   sint32_t err;
 
   if(pile.force_gateway32){
@@ -54,8 +49,12 @@ FUNC void get_dst_mac(NET_socket_t *sock, const void *ifname, uint8_t *mac) {
   }
 }
 
+#include "_run_thread_common.h"
+
 #include "_run_thread_PACKET.h"
-#include "_run_thread_dpdk.h"
+#ifdef set_use_dpdk
+  #include "_run_thread_dpdk.h"
+#endif
 
 FUNC void run_entry(void *p_0){
   (void)p_0;
@@ -155,7 +154,7 @@ FUNC void run_entry(void *p_0){
         _abort();
       }
 
-      struct rte_mempool *mempool = rte_pktmbuf_pool_create(
+      pile.dpdk.mempool = rte_pktmbuf_pool_create(
         "mempool",
         8191,
         256,
@@ -163,11 +162,11 @@ FUNC void run_entry(void *p_0){
         RTE_MBUF_DEFAULT_BUF_SIZE,
         rte_socket_id()
       );
-      if(mempool == NULL){
+      if(pile.dpdk.mempool == NULL){
         _abort();
       }
 
-      err = rte_eth_rx_queue_setup(i_dpdk_interface, 0, 512, rte_eth_dev_socket_id(i_dpdk_interface), NULL, mempool);
+      err = rte_eth_rx_queue_setup(i_dpdk_interface, 0, 512, rte_eth_dev_socket_id(i_dpdk_interface), NULL, pile.dpdk.mempool);
       if(err){
         _abort();
       }
@@ -196,7 +195,7 @@ FUNC void run_entry(void *p_0){
       uint32_t lcore_id;
       RTE_LCORE_FOREACH_WORKER(lcore_id){
         if(given_threads < wanted_thread_count){
-          err = rte_eal_remote_launch(_run_thread_dpdk, &i_dpdk_interface, lcore_id);
+          err = rte_eal_remote_launch(_run_thread_dpdk, NULL, lcore_id);
           if(err){
             _abort();
           }

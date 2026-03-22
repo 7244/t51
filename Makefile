@@ -35,7 +35,7 @@ _all: _compile _clean
 
 _compile:
 ifeq ($(use_dpdk),yes)
-	$(COMPILER_CC) $(COMPILER_STD) src/main.c -I/usr/include/dpdk -I/usr/include/x86_64-linux-gnu/dpdk/ -lrte_eal -lrte_ethdev -lrte_net_ixgbe -lrte_mbuf -Dset_use_dpdk=1 -o $(OUTPUT)
+	$(COMPILER_CC) $(COMPILER_STD) -mssse3 src/main.c -I/usr/include/dpdk -I/usr/include/x86_64-linux-gnu/dpdk/ -lrte_eal -lrte_ethdev -lrte_mbuf -lrte_mempool -Dset_use_dpdk=1 -o $(OUTPUT)
 else
 	$(COMPILER) $(CFLAGS) src/main.c -o main.c.o && \
 	$(LINKER) main.c.o -o $(OUTPUT) || true

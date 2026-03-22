@@ -56,6 +56,10 @@ typedef struct{
   bool kernel_bypass;
   #ifdef set_use_dpdk
     bool use_dpdk;
+    struct{
+      uint16_t i_dpdk_interface;
+      struct rte_mempool *mempool;
+    }dpdk;
   #endif
 
   bool force_gateway32;
