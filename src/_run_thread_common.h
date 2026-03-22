@@ -39,11 +39,18 @@ static void run_thread_common_get_macs(uint8_t *src_mac_addr, uint8_t *dst_mac_a
   uint8_t dst_mac_addr[6]; \
   run_thread_common_get_macs(src_mac_addr, dst_mac_addr);
 
-#define run_thread_common_set_packet_initial(data, data_size) \
+#define run_thread_common_get_packet_ptrs(data) \
   NET_machdr_t *machdr = (NET_machdr_t *)(data); \
+  (void)machdr; \
   NET_ipv4hdr_t *ipv4hdr = (NET_ipv4hdr_t *)&machdr[1]; \
+  (void)ipv4hdr; \
   NET_udphdr_t *udphdr = (NET_udphdr_t *)&ipv4hdr[1]; \
+  (void)udphdr; \
   uint8_t *payload = (uint8_t *)&udphdr[1]; \
+  (void)payload;
+
+#define run_thread_common_set_packet_initial(data, data_size) \
+  run_thread_common_get_packet_ptrs(data); \
   \
   if((uintptr_t)payload - (uintptr_t)ipv4hdr + pile.payload_size > (data_size)){ \
     _abort(); \

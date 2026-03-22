@@ -8,31 +8,66 @@ static int _run_thread_dpdk(void *p_0){
 
   run_thread_common_get_macs();
 
+  uint32_t _ipv4check_pre;
+  uint32_t _udpcheck_pre;
+
+  for(uint32_t i = 0; i < sizeof(mbuf) / sizeof(mbuf[0]); i++){
+    mbuf[i] = rte_pktmbuf_alloc(mempool);
+    if(mbuf[i] == NULL){
+      _abort();
+    }
+
+    uint8_t *data = rte_pktmbuf_mtod(mbuf[i], uint8_t *);
+
+    run_thread_common_set_packet_initial(data, 1024);
+
+    /* i know this assigns same value multiple times */
+    /* but its short code and uses less execution memory */
+    _ipv4check_pre = ipv4check_pre;
+    _udpcheck_pre = udpcheck_pre;
+  }
+
+  uint32_t total_iteration = 0;
+  uint32_t to = sizeof(mbuf) / sizeof(mbuf[0]);
   while(1){
-    for(uint32_t i = 0; i < sizeof(mbuf) / sizeof(mbuf[0]); i++){
-      mbuf[i] = rte_pktmbuf_alloc(mempool);
-      if(mbuf[i] == NULL){
-        _abort();
-      }
+    for(uint32_t i = 0; i < to; i++){
 
       uint8_t *data = rte_pktmbuf_mtod(mbuf[i], uint8_t *);
 
-      run_thread_common_set_packet_initial(data, 1024);
+      run_thread_common_get_packet_ptrs(data);
+
+      uint32_t ipv4check_pre_current = _ipv4check_pre;
       /* TODO doesnt iterate fields */
-      ipv4hdr->check = checksum_final(ipv4check_pre);
-      udphdr->check = checksum_final(udpcheck_pre);
+      ipv4hdr->check = checksum_final(ipv4check_pre_current);
+
+      uint32_t udpcheck_pre_current = _udpcheck_pre;
+
+      /* TODO doesnt check some fields */
+
+      if(pile.rand_sport){
+        udphdr->source = total_iteration;
+        udpcheck_pre_current += checksum_pre_single16(udphdr->source);
+      }
+      if(pile.rand_dport){
+        udphdr->dest = total_iteration;
+        udpcheck_pre_current += checksum_pre_single16(udphdr->dest);
+      }
+
+      udphdr->check = checksum_final(udpcheck_pre_current);
 
       uint32_t final_size = sizeof(NET_machdr_t) + sizeof(NET_ipv4hdr_t) + sizeof(NET_udphdr_t) + pile.payload_size;
 
       mbuf[i]->data_len = final_size;
       mbuf[i]->pkt_len = final_size;
+
+      total_iteration++;
     }
 
-    uint32_t sent = rte_eth_tx_burst(i_dpdk_interface, tx_queue_index, mbuf, sizeof(mbuf) / sizeof(mbuf[0]));
+    to = rte_eth_tx_burst(i_dpdk_interface, tx_queue_index, mbuf, sizeof(mbuf) / sizeof(mbuf[0]));
+  }
 
-    for(uint32_t i = sent; i < sizeof(mbuf) / sizeof(mbuf[0]); i++){
-      rte_pktmbuf_free(mbuf[i]);
-    }
+  for(uint32_t i = 0; i < sizeof(mbuf) / sizeof(mbuf[0]); i++){
+    rte_pktmbuf_free(mbuf[i]);
   }
 
   return 0;
