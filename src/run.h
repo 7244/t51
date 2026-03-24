@@ -54,6 +54,8 @@ FUNC void get_ifname_dst_mac_cstr(const void *ifname, uint8_t *mac) {
 #include "_run_thread_PACKET.h"
 #ifdef set_use_dpdk
   #include "_run_thread_dpdk.h"
+  #include <WITCH/STR/psu.h>
+  #include <WITCH/STR/uto.h>
 #endif
 
 FUNC void run_entry(void *p_0){
@@ -61,6 +63,42 @@ FUNC void run_entry(void *p_0){
 
   #ifdef set_use_dpdk
     {
+      do{
+        /* need to check 2mb huge pages */
+        IO_fd_t fd;
+        sint32_t r = IO_open("/sys/devices/system/node/node0/hugepages/hugepages-2048kB/nr_hugepages", O_RDWR, &fd);
+        if(r){
+          /* TOOD give error print */
+          break;
+        }
+
+        uint8_t buf[64];
+        IO_ssize_t ssize = IO_read(&fd, buf, sizeof(buf));
+        if(ssize <= 0){
+          _abort();
+        }
+
+        uintptr_t stri = 0;
+        uintptr_t page_count = STR_psu_iguess(buf, &stri);
+        if(page_count == 0){
+          if(IO_lseek(&fd, 0, SEEK_SET)){
+            _abort();
+          }
+
+          uint8_t *ptr = buf;
+          uintptr_t ptr_size;
+          if(STR_uto(64, 10, &ptr, &ptr_size)){
+            _abort();
+          }
+
+          if((uintptr_t)IO_write(&fd, ptr, ptr_size) != ptr_size){
+            _abort();
+          }
+        }
+
+        IO_close(&fd);
+      }while(0);
+
       /* argc 0 gives error in some dpdk versions */
       char *rte_argv = "";
       int err = rte_eal_init(1, &rte_argv);
@@ -74,36 +112,69 @@ FUNC void run_entry(void *p_0){
         _abort();
       }
 
+      /* TODO put this check to somewhere else */
+      if(pile.pci_name != NULL && pile.difacename != NULL){
+        _abort();
+      }
 
+      uint8_t _wanted_pci_name[4 + 1 + 2 + 1 + 2 + 1 + 1 + 1];
       const uint8_t *wanted_pci_name;
       if(pile.pci_name != NULL){
         wanted_pci_name = pile.pci_name;
       }
       else if(pile.difacename != NULL){
-        /* TODO */
-        _abort();
+        if(NET_GetPCIStringFromIFName_cstr((const char *)pile.difacename, _wanted_pci_name)){
+          _abort();
+        }
+        _wanted_pci_name[sizeof(_wanted_pci_name) - 1] = 0;
+        wanted_pci_name = _wanted_pci_name;
       }
       else{
         /* TODO */
         _abort();
       }
 
-      uint16_t dpdk_interface_count = rte_eth_dev_count_avail();
-      uint16_t i_dpdk_interface = 0;
-      for(; i_dpdk_interface < dpdk_interface_count; i_dpdk_interface++){
-        uint8_t name_buffer[RTE_ETH_NAME_MAX_LEN];
-        err = rte_eth_dev_get_name_by_port(i_dpdk_interface, (char *)name_buffer);
-        if(err){
-          /* TODO */
-          _abort();
-        }
 
-        if(!STR_cmp(wanted_pci_name, name_buffer)){
+      uint16_t i_dpdk_interface;
+      while(1){
+        uint16_t dpdk_interface_count = rte_eth_dev_count_avail();
+        for(i_dpdk_interface = 0; i_dpdk_interface < dpdk_interface_count; i_dpdk_interface++){
+          uint8_t name_buffer[RTE_ETH_NAME_MAX_LEN];
+          err = rte_eth_dev_get_name_by_port(i_dpdk_interface, (char *)name_buffer);
+          if(err){
+            /* TODO */
+            _abort();
+          }
+  
+          if(!STR_cmp(wanted_pci_name, name_buffer)){
+            break;
+          }
+        }
+        if(i_dpdk_interface != dpdk_interface_count){
           break;
         }
-      }
-      if(i_dpdk_interface == dpdk_interface_count){
-        /* TODO */
+        if(pile.difacename != NULL){
+          puts_literal("[WARNING] your ifname doesnt support dpdk\n");
+        }
+        else{
+          puts_literal("[WARNING] your pci name doesnt support dpdk\n");
+        }
+        /* TODO QUESTION try sriov */
+        if(pile.difacename != NULL){
+          puts_literal("[QUESTION] do you want to change driver of it? (bool): ");
+          /* TODO flush get input */
+          puts_literal("[QUESTION] this gonna make your ifname unusable. are you sure? (bool): ");
+          /* TODO flush get input */
+        }
+        else{
+          puts_literal("[QUESTION] do you want to change driver of it? (bool): ");
+          /* TODO flush get input */
+        }
+
+        gt_cant_solve_interface_search:;
+
+        puts_literal("[ERROR] cant solve dpdk interface search. aborting.\n");
+
         _abort();
       }
 
