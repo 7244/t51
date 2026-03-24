@@ -13,8 +13,8 @@ COMPILER_CC = cc
 COMPILER_STD = -std=c99
 COMPILER_STD += -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-parentheses -Wno-strict-aliasing
 
-COMPILER = COMPILER_CC
-COMPILER += COMPILER_STD
+COMPILER = $(COMPILER_CC)
+COMPILER += $(COMPILER_STD)
 COMPILER += -fno-pic
 COMPILER += -fno-pie
 COMPILER += -nostdlib -fomit-frame-pointer -fno-stack-protector -ffreestanding -fno-asynchronous-unwind-tables -fdata-sections -ffunction-sections -Qn
