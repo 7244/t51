@@ -268,6 +268,7 @@ FUNC void run_entry(void *p_0){
 
             __builtin_memcpy(_wanted_pci_name, extracted_pci_name, sizeof(extracted_pci_name));
             _wanted_pci_name[sizeof(extracted_pci_name)] = 0;
+            wanted_pci_name = _wanted_pci_name;
 
             tried_sriov_current++;
 
@@ -417,6 +418,9 @@ FUNC void run_entry(void *p_0){
 
       pile.dpdk.given_worker_queues = 0;
       __flush_compiler_variable_rw(pile.dpdk.given_worker_queues);
+
+      puts_literal("[INFORMATION] started.\n");
+      flush_print();
 
       uint32_t given_threads = 0;
       uint32_t lcore_id;

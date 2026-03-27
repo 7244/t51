@@ -1,20 +1,18 @@
 static void run_thread_common_get_macs(uint8_t *src_mac_addr, uint8_t *dst_mac_addr){
-  if(pile.difacename != NULL){
+  if(0){}
+  #ifdef set_use_dpdk
+    else if(pile.use_dpdk){
+      struct rte_ether_addr rte_ether_addr;
+      rte_eth_macaddr_get(pile.dpdk.i_dpdk_interface, &rte_ether_addr);
+      __builtin_memcpy(src_mac_addr, rte_ether_addr.addr_bytes, 6);
+    }
+  #endif
+  else if(pile.difacename != NULL){
     get_ifname_src_mac_cstr(pile.difacename, src_mac_addr);
   }
   else if(pile.pci_name != NULL){
-    if(0){}
-    #ifdef set_use_dpdk
-      else if(pile.use_dpdk){
-        struct rte_ether_addr rte_ether_addr;
-        rte_eth_macaddr_get(pile.dpdk.i_dpdk_interface, &rte_ether_addr);
-        __builtin_memcpy(src_mac_addr, rte_ether_addr.addr_bytes, 6);
-      }
-    #endif
-    else{
-      /* TOOD */
-      _abort();
-    }
+    /* TOOD */
+    _abort();
   }
 
   if(pile.force_dst_mac){
