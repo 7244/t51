@@ -88,17 +88,25 @@ FUNC bool utility_get_stdin_bool_repeat(){
       _abort();
     }
     read_buf[s] = 0;
+    for(uintptr_t i = 0;; i++){
+      if(STR_ischar_blank(read_buf[i])){
+        read_buf[i] = 0;
+        break;
+      }
+    }
     bool ret;
     sint32_t err = _STR_ParseCStringAsBool(read_buf, &ret);
-    if(err){
-      if(s > 0){
-        if(read_buf[s - 1] != '\n'){
-          puts_literal("\n");
-        }
-      }
-      puts_literal("utility_get_stdin_bool_repeat: ");
-      flush_print();
+    if(err == 0){
+      return ret;
     }
+
+    if(s > 0){
+      if(read_buf[s - 1] != '\n'){
+        puts_literal("\n");
+      }
+    }
+    puts_literal("utility_get_stdin_bool_repeat: ");
+    flush_print();
   }
 }
 
