@@ -99,10 +99,12 @@ FUNC void run_entry(void *p_0){
         IO_close(&fd);
       }while(0);
 
-      /* argc 0 gives error in some dpdk versions */
-      char *rte_argv = "";
-      int err = rte_eal_init(1, &rte_argv);
-      if(err){
+      char *rte_argv[] = {
+        "exe",
+        "--log-level=*:emerg"
+      };
+      int err = rte_eal_init(sizeof(rte_argv) / sizeof(rte_argv[0]), rte_argv);
+      if(err != sizeof(rte_argv) / sizeof(rte_argv[0]) - 1){
         _abort();
       }
 
