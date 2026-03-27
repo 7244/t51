@@ -117,26 +117,37 @@ FUNC void run_entry(void *p_0){
         _abort();
       }
 
+      uint8_t _wanted_orig_pci_name[4 + 1 + 2 + 1 + 2 + 1 + 1 + 1];
       uint8_t _wanted_pci_name[4 + 1 + 2 + 1 + 2 + 1 + 1 + 1];
+      const uint8_t *wanted_orig_pci_name;
       const uint8_t *wanted_pci_name;
       if(pile.pci_name != NULL){
-        wanted_pci_name = pile.pci_name;
+        wanted_orig_pci_name = pile.pci_name;
       }
       else if(pile.difacename != NULL){
-        if(NET_GetPCIStringFromIFName_cstr((const char *)pile.difacename, _wanted_pci_name)){
+        if(NET_GetPCIStringFromIFName_cstr((const char *)pile.difacename, _wanted_orig_pci_name)){
           _abort();
         }
-        _wanted_pci_name[sizeof(_wanted_pci_name) - 1] = 0;
-        wanted_pci_name = _wanted_pci_name;
+        _wanted_orig_pci_name[sizeof(_wanted_orig_pci_name) - 1] = 0;
+        wanted_orig_pci_name = _wanted_orig_pci_name;
       }
       else{
         /* TODO */
         _abort();
       }
 
+      wanted_pci_name = wanted_orig_pci_name;
+
+      bool did_check_existing_sriov = false;
+      bool is_sriov_available = false;
+
+      uintptr_t tried_sriov_current = 0;
+      uintptr_t tried_sriov_possible = 0;
 
       uint16_t i_dpdk_interface;
       while(1){
+        gt_retry_dpdk_interface_search:;
+
         uint16_t dpdk_interface_count = rte_eth_dev_count_avail();
         for(i_dpdk_interface = 0; i_dpdk_interface < dpdk_interface_count; i_dpdk_interface++){
           uint8_t name_buffer[RTE_ETH_NAME_MAX_LEN];
@@ -153,25 +164,166 @@ FUNC void run_entry(void *p_0){
         if(i_dpdk_interface != dpdk_interface_count){
           break;
         }
-        if(pile.difacename != NULL){
-          puts_literal("[WARNING] your ifname doesnt support dpdk\n");
-        }
-        else{
-          puts_literal("[WARNING] your pci name doesnt support dpdk\n");
-        }
-        /* TODO QUESTION try sriov */
-        if(pile.difacename != NULL){
-          puts_literal("[QUESTION] do you want to change driver of it? (bool): ");
-          /* TODO flush get input */
-          puts_literal("[QUESTION] this gonna make your ifname unusable. are you sure? (bool): ");
-          /* TODO flush get input */
-        }
-        else{
-          puts_literal("[QUESTION] do you want to change driver of it? (bool): ");
-          /* TODO flush get input */
+
+        puts_literal("[WARNING] this pci name doesnt support dpdk\n");
+
+        if(did_check_existing_sriov == false){
+          do{
+            {
+              const char bun_top[] = "/sys/bus/pci/devices/";
+              const char bun_bottom[] = "/sriov_numvfs";
+    
+              uint8_t path[sizeof(bun_top) - 1 + 12 + sizeof(bun_bottom)];
+    
+              uint8_t *p = path;
+              _memcpy_cstr_sumret(p, bun_top);
+              _memcpy_cstr_sumret(p, (const char *)wanted_orig_pci_name);
+              _memcpy_cstr_sumret(p, bun_bottom, +1);
+    
+              IO_fd_t fd;
+              sint32_t open_r = IO_open(path, O_RDONLY, &fd);
+              if(open_r != 0){
+                break;
+              }
+              is_sriov_available = true;
+    
+              uint8_t buf[32];
+              IO_ssize_t ssize = IO_read(&fd, buf, sizeof(buf));
+              IO_close(&fd);
+    
+              if(ssize <= 0){
+                _abort();
+              }
+    
+              uintptr_t stri = 0;
+              tried_sriov_possible = STR_psu_iguess(buf, &stri);
+              if(tried_sriov_possible == 0){
+                break;
+              }
+            }
+          }while(0);
+
+          did_check_existing_sriov = true;
         }
 
-        gt_cant_solve_interface_search:;
+        {
+          const char bun_top[] = "/sys/bus/pci/devices/";
+          const char bun_bottom[] = "/virtfn";
+
+          /* TOOD instead of 20 use base10 max digit size for uintptr_t */
+          uint8_t path[sizeof(bun_top) - 1 + 12 + sizeof(bun_bottom) - 1 + 20 + 1];
+
+          uint8_t *p = path;
+          _memcpy_cstr_sumret(p, bun_top);
+          _memcpy_cstr_sumret(p, (const char *)wanted_orig_pci_name);
+          _memcpy_cstr_sumret(p, bun_bottom);
+
+          for(; tried_sriov_current < tried_sriov_possible; tried_sriov_current++){
+            uint8_t utobuf[64];
+            uint8_t *utobuf_ptr = utobuf;
+            uintptr_t utosize;
+            STR_uto64(tried_sriov_current, 10, &utobuf_ptr, &utosize);
+
+            __builtin_memcpy(p, utobuf_ptr, utosize);
+            p[utosize] = 0;
+
+            uint8_t buf[PATH_MAX];
+            sintptr_t readlink_r = IO_readlink_cstr((const char *)path, buf, sizeof(buf));
+            if(readlink_r <= 0){
+              _abort();
+            }
+
+            uint8_t extracted_pci_name[12];
+            if(!STR_ExtractPCIAddressInsideString(buf, readlink_r, extracted_pci_name)){
+              _abort();
+            }
+
+            if(wanted_pci_name == wanted_orig_pci_name){
+              puts_literal("[QUESTION] do you want to try use existing sr-iov child\n");
+              puts_literal("  parent: ");
+              puts_size(wanted_orig_pci_name, 12);
+              puts_literal(" child: ");
+              puts_size(extracted_pci_name, 12);
+              puts_literal("\n");
+            }
+            else{
+              puts_literal("[QUESTION] do you want to try use other sr-iov child\n");
+              puts_literal("  parent: ");
+              puts_size(wanted_orig_pci_name, 12);
+              puts_literal(" child: ");
+              puts_size(wanted_pci_name, 12);
+              puts_literal(" new child: ");
+              puts_size(extracted_pci_name, 12);
+              puts_literal("\n");
+            }
+            puts_literal("  ? (bool): ");
+            flush_print();
+
+            bool b = utility_get_stdin_bool_repeat();
+            if(b == false){
+              continue;
+            }
+
+            __builtin_memcpy(_wanted_pci_name, extracted_pci_name, sizeof(extracted_pci_name));
+            _wanted_pci_name[sizeof(extracted_pci_name)] = 0;
+
+            tried_sriov_current++;
+
+            goto gt_retry_dpdk_interface_search;
+          }
+        }
+
+        puts_literal("[QUESTION] do you want to change driver of selected pci ");
+        puts_size(wanted_pci_name, 12);
+        puts_literal(" ? (bool): ");
+        flush_print();
+        bool b = utility_get_stdin_bool_repeat();
+        if(b == true){
+          {
+            sint32_t km = IO_LoadDefaultKernelModule_cstr("uio/uio_pci_generic", "");
+            if(km){
+              _abort();
+            }
+          }
+
+          {
+            const char bun0[] = "/sys/bus/pci/devices/";
+            const char bun1[] = "/driver_override";
+
+            uint8_t path[sizeof(bun0) - 1 + 12 + sizeof(bun1) - 1 + 1];
+
+            uint8_t *p = path;
+            _memcpy_cstr_sumret(p, bun0);
+            _memcpy_size_sum(p, wanted_pci_name, 12);
+            _memcpy_cstr_sumret(p, bun1, +1);
+
+            IO_QuickExistingFileWriteCSTR_cstr(path, "uio_pci_generic",
+              _abort();
+            );
+          }
+          {
+            const char bun0[] = "/sys/bus/pci/devices/";
+            const char bun1[] = "/driver/unbind";
+
+            uint8_t path[sizeof(bun0) - 1 + 12 + sizeof(bun1) - 1 + 1];
+
+            uint8_t *p = path;
+            _memcpy_cstr_sumret(p, bun0);
+            _memcpy_size_sum(p, wanted_pci_name, 12);
+            _memcpy_cstr_sumret(p, bun1, +1);
+
+            IO_QuickExistingFileWriteData_cstr(path, wanted_pci_name, 12,
+              _abort();
+            );
+          }
+          {
+            IO_QuickExistingFileWriteData_cstr("/sys/bus/pci/drivers/uio_pci_generic/bind", wanted_pci_name, 12,
+              _abort();
+            );
+          }
+
+          goto gt_retry_dpdk_interface_search;
+        }
 
         puts_literal("[ERROR] cant solve dpdk interface search. aborting.\n");
 

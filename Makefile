@@ -10,6 +10,7 @@ ARCH = AMD64
 LINKER = ld -no-pie -n --gc-sections $($(ARCH)_LINKER)
 
 COMPILER_CC = cc
+COMPILER_CC += -Iinclude
 COMPILER_STD = -std=c99
 COMPILER_STD += -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-parentheses -Wno-strict-aliasing
 
@@ -20,7 +21,6 @@ COMPILER += -fno-pie
 COMPILER += -nostdlib -fomit-frame-pointer -fno-stack-protector -ffreestanding -fno-asynchronous-unwind-tables -fdata-sections -ffunction-sections -Qn
 COMPILER += $($(ARCH)_COMPILER)
 COMPILER += -c
-COMPILER += -Iinclude
 
 debug: CFLAGS = -O1 -g
 debug: _all

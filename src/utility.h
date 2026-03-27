@@ -78,6 +78,29 @@ FUNC void _abort(const char *filename, uintptr_t filename_length, uintptr_t line
   _abort(__FILE__, sizeof(__FILE__) - 1, __LINE__); \
   __unreachable();
 
+FUNC bool utility_get_stdin_bool_repeat(){
+  IO_fd_t fd;
+  IO_fd_set(&fd, STDIN_FILENO);
+  while(1){
+    uint8_t read_buf[64];
+    IO_ssize_t s = IO_read(&fd, read_buf, sizeof(read_buf) - 1);
+    if(s < 0){
+      _abort();
+    }
+    read_buf[s] = 0;
+    bool ret;
+    sint32_t err = _STR_ParseCStringAsBool(read_buf, &ret);
+    if(err){
+      if(s > 0){
+        if(read_buf[s - 1] != '\n'){
+          puts_literal("\n");
+        }
+      }
+      puts_literal("utility_get_stdin_bool_repeat: ");
+      flush_print();
+    }
+  }
+}
 
 FUNC uint32_t fast_limiter(
   uint64_t *p_current,
