@@ -276,6 +276,10 @@ FUNC void run_entry(void *p_0){
 
             tried_sriov_current++;
 
+            if(tried_sriov_current - 1 == dont_question_for_pick_sriov_n){
+              goto gt_change_driver;
+            }
+
             goto gt_retry_dpdk_interface_search;
           }
         }
@@ -320,6 +324,8 @@ FUNC void run_entry(void *p_0){
         flush_print();
         bool b = utility_get_stdin_bool_repeat();
         if(b == true){
+          gt_change_driver:;
+
           {
             sint32_t km = IO_LoadDefaultKernelModule_cstr("uio_pci_generic", "");
             if(km){
@@ -361,6 +367,13 @@ FUNC void run_entry(void *p_0){
             IO_QuickExistingFileWriteData_cstr("/sys/bus/pci/drivers/uio_pci_generic/bind", wanted_pci_name, 12,
               _abort();
             );
+          }
+
+          if(rte_bus_scan()){
+            _abort();
+          }
+          if(rte_bus_probe()){
+            _abort();
           }
 
           goto gt_retry_dpdk_interface_search;
