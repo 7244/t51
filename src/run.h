@@ -321,7 +321,7 @@ FUNC void run_entry(void *p_0){
         bool b = utility_get_stdin_bool_repeat();
         if(b == true){
           {
-            sint32_t km = IO_LoadDefaultKernelModule_cstr("uio/uio_pci_generic", "");
+            sint32_t km = IO_LoadDefaultKernelModule_cstr("uio_pci_generic", "");
             if(km){
               _abort();
             }
