@@ -56,6 +56,7 @@ FUNC void get_ifname_dst_mac_cstr(const void *ifname, uint8_t *mac) {
   #include "_run_thread_dpdk.h"
   #include <WITCH/STR/psu.h>
   #include <WITCH/STR/uto.h>
+  #include <WITCH/generic_alloc.h>
 #endif
 
 FUNC void run_entry(void *p_0){
@@ -99,21 +100,6 @@ FUNC void run_entry(void *p_0){
         IO_close(&fd);
       }while(0);
 
-      char *rte_argv[] = {
-        "exe",
-        "--log-level=*:emerg"
-      };
-      int err = rte_eal_init(sizeof(rte_argv) / sizeof(rte_argv[0]), rte_argv);
-      if(err != sizeof(rte_argv) / sizeof(rte_argv[0]) - 1){
-        _abort();
-      }
-
-      uint32_t dpdk_thread_count = rte_lcore_count();
-      uint32_t wanted_thread_count = pile.threads;
-      if(wanted_thread_count > dpdk_thread_count){
-        _abort();
-      }
-
       /* TODO put this check to somewhere else */
       if(pile.pci_name != NULL && pile.difacename != NULL){
         _abort();
@@ -146,6 +132,26 @@ FUNC void run_entry(void *p_0){
       uintptr_t tried_sriov_current = 0;
       uintptr_t tried_sriov_possible = 0;
       uintptr_t dont_question_for_pick_sriov_n = (uintptr_t)-1;
+
+      /* this is veryyyyyyyy important variable. */
+      /* frequent calls to rte_eth_dev_start makes whole PF unresponsive even if its called for VF */
+      /* so so calling rte_eth_dev_start with sleep (based on this variable) makes things... good. */
+      uint64_t eth_dev_start_counter = 0;
+
+      char *rte_argv[] = {
+        "exe",
+        "--log-level=*:emerg"
+      };
+      int err = rte_eal_init(sizeof(rte_argv) / sizeof(rte_argv[0]), rte_argv);
+      if(err != sizeof(rte_argv) / sizeof(rte_argv[0]) - 1){
+        _abort();
+      }
+
+      uint32_t dpdk_thread_count = rte_lcore_count();
+      uint32_t wanted_thread_count = pile.threads;
+      if(wanted_thread_count > dpdk_thread_count){
+        _abort();
+      }
 
       uint16_t i_dpdk_interface;
       while(1){
@@ -328,7 +334,7 @@ FUNC void run_entry(void *p_0){
 
           {
             sint32_t km = IO_LoadDefaultKernelModule_cstr("uio_pci_generic", "");
-            if(km){
+            if(km && km != -EEXIST){
               _abort();
             }
           }
@@ -455,20 +461,56 @@ FUNC void run_entry(void *p_0){
         }
       }
 
-      err = rte_eth_dev_start(i_dpdk_interface);
-      if(err){
+      pile.dpdk.worker_packet_counters = __generic_mmap(wanted_thread_count * 64);
+      if((uintptr_t)pile.dpdk.worker_packet_counters > (uintptr_t)-0x1000){
+        _abort();
+      }
+      __flush_compiler_variable_rw(pile.dpdk.worker_packet_counters);
+
+      pile.dpdk.worker_stop_value = __generic_mmap(64);
+      if((uintptr_t)pile.dpdk.worker_stop_value > (uintptr_t)-0x1000){
         _abort();
       }
 
-      #if 0
-      err = rte_eth_promiscuous_enable(i_dpdk_interface);
-      if(err){
-        _abort();
-      }
-      #endif
+      gt_start_dev:;
+
+      do{
+        /* TODO this doesnt correctly check if selected pci has parent or not */
+        if(wanted_pci_name != wanted_orig_pci_name){
+          if(eth_dev_start_counter){
+            uint64_t sleep_ns = (uint64_t)1 << eth_dev_start_counter + 32;
+
+            puts_literal("[INFORMATION] gonna sleep ");
+            utility_puts_number(sleep_ns / 1000000);
+            puts_literal("ms for rte_eth_dev_start()\n");
+            flush_print();
+
+            TH_sleepi(sleep_ns);
+          }
+        }
+
+        err = rte_eth_dev_start(i_dpdk_interface);
+
+        /* TODO this doesnt correctly check if selected pci has parent or not */
+        if(wanted_pci_name != wanted_orig_pci_name){
+          if(eth_dev_start_counter < 2){
+            eth_dev_start_counter += 1;
+          }
+          else{
+            _abort();
+          }
+        }
+
+        if(err == 0){
+          break;
+        }
+      }while(1);
 
       pile.dpdk.given_worker_queues = 0;
       __flush_compiler_variable_rw(pile.dpdk.given_worker_queues);
+
+      *pile.dpdk.worker_stop_value = 0;
+      __flush_compiler_variable_rw(pile.dpdk.worker_stop_value);
 
       puts_literal("[INFORMATION] started.\n");
       flush_print();
@@ -485,7 +527,35 @@ FUNC void run_entry(void *p_0){
         }
       }
 
+      uint64_t total_sent_packets = 0;
+      while(1){
+        TH_sleepi((uint64_t)1 << 30);
+
+        uint64_t new_total_sent_packets = 0;
+        for(uint32_t i = 0; i < wanted_thread_count; i++){
+          uint64_t *counter_ptr = (uint64_t *)&pile.dpdk.worker_packet_counters[i * 64];
+
+          new_total_sent_packets += *counter_ptr;
+        }
+
+        if(total_sent_packets == new_total_sent_packets){
+          puts_literal("[WARNING] total_sent_packets didnt change for 1 gibinanosecond. gonna restart dpdk device.\n");
+          flush_print();
+          break;
+        }
+
+        total_sent_packets = new_total_sent_packets;
+      }
+
+      __atomic_exchange_n(pile.dpdk.worker_stop_value, 1, __ATOMIC_SEQ_CST);
+
       rte_eal_mp_wait_lcore();
+
+      if(rte_eth_dev_stop(i_dpdk_interface)){
+        _abort();
+      }
+
+      goto gt_start_dev;
 
       /* TODO */
       _abort();

@@ -63,6 +63,10 @@ typedef struct{
 
       /* increases atomically */
       uint32_t given_worker_queues;
+
+      uint8_t *worker_packet_counters;
+
+      uint32_t *worker_stop_value;
     }dpdk;
   #endif
 

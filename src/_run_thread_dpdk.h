@@ -4,6 +4,10 @@ static int _run_thread_dpdk(void *p_0){
 
   uint32_t tx_queue_index = __atomic_fetch_add(&pile.dpdk.given_worker_queues, 1, __ATOMIC_SEQ_CST);
 
+  uint64_t *counter_ptr = (uint64_t *)&pile.dpdk.worker_packet_counters[tx_queue_index * 64];
+
+  uint32_t *worker_stop_value = pile.dpdk.worker_stop_value;
+
   struct rte_mbuf *mbuf[32];
 
   run_thread_common_get_macs();
@@ -29,7 +33,7 @@ static int _run_thread_dpdk(void *p_0){
 
   uint32_t total_iteration = 0;
   uint32_t to = sizeof(mbuf) / sizeof(mbuf[0]);
-  while(1){
+  while(*worker_stop_value == 0){
     for(uint32_t i = 0; i < to; i++){
 
       uint8_t *data = rte_pktmbuf_mtod(mbuf[i], uint8_t *);
@@ -64,6 +68,9 @@ static int _run_thread_dpdk(void *p_0){
     }
 
     to = rte_eth_tx_burst(i_dpdk_interface, tx_queue_index, mbuf, sizeof(mbuf) / sizeof(mbuf[0]));
+
+    *counter_ptr += to;
+    __flush_compiler_variable_rw(*counter_ptr);
   }
 
   for(uint32_t i = 0; i < sizeof(mbuf) / sizeof(mbuf[0]); i++){
