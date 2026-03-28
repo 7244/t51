@@ -145,6 +145,7 @@ FUNC void run_entry(void *p_0){
 
       uintptr_t tried_sriov_current = 0;
       uintptr_t tried_sriov_possible = 0;
+      uintptr_t dont_question_for_pick_sriov_n = (uintptr_t)-1;
 
       uint16_t i_dpdk_interface;
       while(1){
@@ -208,6 +209,7 @@ FUNC void run_entry(void *p_0){
           did_check_existing_sriov = true;
         }
 
+        gt_iterate_sriov:;
         {
           const char bun_top[] = "/sys/bus/pci/devices/";
           const char bun_bottom[] = "/virtfn";
@@ -240,30 +242,32 @@ FUNC void run_entry(void *p_0){
               _abort();
             }
 
-            if(wanted_pci_name == wanted_orig_pci_name){
-              puts_literal("[QUESTION] do you want to try use existing sr-iov child\n");
-              puts_literal("  parent: ");
-              puts_size(wanted_orig_pci_name, 12);
-              puts_literal(" child: ");
-              puts_size(extracted_pci_name, 12);
-              puts_literal("\n");
-            }
-            else{
-              puts_literal("[QUESTION] do you want to try use other sr-iov child\n");
-              puts_literal("  parent: ");
-              puts_size(wanted_orig_pci_name, 12);
-              puts_literal(" child: ");
-              puts_size(wanted_pci_name, 12);
-              puts_literal(" new child: ");
-              puts_size(extracted_pci_name, 12);
-              puts_literal("\n");
-            }
-            puts_literal("  ? (bool): ");
-            flush_print();
-
-            bool b = utility_get_stdin_bool_repeat();
-            if(b == false){
-              continue;
+            if(tried_sriov_current != dont_question_for_pick_sriov_n){
+              if(wanted_pci_name == wanted_orig_pci_name){
+                puts_literal("[QUESTION] do you want to try use existing sr-iov child\n");
+                puts_literal("  parent: ");
+                puts_size(wanted_orig_pci_name, 12);
+                puts_literal(" child: ");
+                puts_size(extracted_pci_name, 12);
+                puts_literal("\n");
+              }
+              else{
+                puts_literal("[QUESTION] do you want to try use other sr-iov child\n");
+                puts_literal("  parent: ");
+                puts_size(wanted_orig_pci_name, 12);
+                puts_literal(" child: ");
+                puts_size(wanted_pci_name, 12);
+                puts_literal(" new child: ");
+                puts_size(extracted_pci_name, 12);
+                puts_literal("\n");
+              }
+              puts_literal("  ? (bool): ");
+              flush_print();
+  
+              bool b = utility_get_stdin_bool_repeat();
+              if(b == false){
+                continue;
+              }
             }
 
             __builtin_memcpy(_wanted_pci_name, extracted_pci_name, sizeof(extracted_pci_name));
@@ -274,6 +278,40 @@ FUNC void run_entry(void *p_0){
 
             goto gt_retry_dpdk_interface_search;
           }
+        }
+
+        if(is_sriov_available){
+          if(wanted_pci_name == wanted_orig_pci_name)do{
+            puts_literal("[QUESTION] do you want to create a new sriov child under parent ");
+            puts_size(wanted_orig_pci_name, 12);
+            puts_literal(" ? (bool): ");
+            flush_print();
+            bool b = utility_get_stdin_bool_repeat();
+            if(b == false){
+              is_sriov_available = false;
+              break;
+            }
+
+            tried_sriov_possible += 1;
+
+            const char bun0[] = "/sys/bus/pci/devices/";
+            const char bun1[] = "/sriov_numvfs";
+  
+            uint8_t path[sizeof(bun0) - 1 + 12 + sizeof(bun1) - 1 + 1];
+  
+            uint8_t *p = path;
+            _memcpy_cstr_sumret(p, bun0);
+            _memcpy_cstr_sumret(p, (const char *)wanted_orig_pci_name);
+            _memcpy_cstr_sumret(p, bun1, +1);
+
+            IO_QuickExistingFileWriteBase10_uint64_cstr(path, tried_sriov_possible,
+              _abort();
+            );
+
+            dont_question_for_pick_sriov_n = tried_sriov_possible - 1;
+
+            goto gt_iterate_sriov;
+          }while(0);
         }
 
         puts_literal("[QUESTION] do you want to change driver of selected pci ");
