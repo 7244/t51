@@ -342,7 +342,7 @@ FUNC uintptr_t param_func_difaceip(const uint8_t **arg){
       else if(!STR_n0cmp("psize", pstr)){ iarg += param_func_psize(&argv[iarg]); }
       else{
         puts_literal("error: unexpected argument '");
-        puts_size(pstr, MEM_cstreu(pstr));
+        puts_size(pstr, MEM_cstrlen(pstr));
         puts_literal("' found\n\n");
         print_small_help();
         _exit(1);
