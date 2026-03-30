@@ -1,7 +1,3 @@
-#define STDIN 0
-#define STDOUT 1
-#define STDERR 2
-
 #include _WITCH_PATH(STR/STR.h)
 #include _WITCH_PATH(TH/TH.h)
 
@@ -20,7 +16,7 @@ FUNC void flush_print(){
   _utility_print_index = 0;
 }
 FUNC void utility_init_print(){
-  _utility_print_fdint = STDERR;
+  _utility_print_fdint = IO_STDERR_FILENO;
   _utility_print_index = 0;
 }
 
@@ -64,7 +60,7 @@ FUNC void utility_puts_number(uint64_t num){
 }
 
 FUNC void _abort(const char *filename, uintptr_t filename_length, uintptr_t line){
-  utility_print_setfd(STDERR);
+  utility_print_setfd(IO_STDERR_FILENO);
 
   puts_literal("err at ");
   puts_size(filename, filename_length);
@@ -80,7 +76,7 @@ FUNC void _abort(const char *filename, uintptr_t filename_length, uintptr_t line
 
 FUNC bool utility_get_stdin_bool_repeat(){
   IO_fd_t fd;
-  IO_fd_set(&fd, STDIN_FILENO);
+  IO_fd_set(&fd, IO_STDIN_FILENO);
   while(1){
     uint8_t read_buf[64];
     IO_ssize_t s = IO_read(&fd, read_buf, sizeof(read_buf) - 1);

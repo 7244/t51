@@ -376,7 +376,7 @@ FUNC uintptr_t param_func_difaceip(const uint8_t **arg){
     }
   }
 
-  utility_print_setfd(STDOUT);
+  utility_print_setfd(IO_STDOUT_FILENO);
 
   run_entry(NULL);
 
