@@ -244,7 +244,7 @@ FUNC void run_entry(void *p_0){
             }
 
             uint8_t extracted_pci_name[12];
-            if(!STR_ExtractPCIAddressInsideString(buf, readlink_r, extracted_pci_name)){
+            if(!STR_ExtractPCIAddressInsidePath(buf, readlink_r, extracted_pci_name)){
               _abort();
             }
 
