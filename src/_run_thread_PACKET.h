@@ -125,7 +125,7 @@ FUNC void _run_thread_PACKET(){
           pile.ppspersrcip * ((uint64_t)1 << 32 - pile.source.prefix),
           T_nowi()
         )){
-          // TOOD relax
+          __processor_relax();
         }
       }
 
