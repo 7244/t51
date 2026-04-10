@@ -238,13 +238,13 @@ FUNC void run_entry(void *p_0){
             p[utosize] = 0;
 
             uint8_t buf[PATH_MAX];
-            sintptr_t readlink_r = IO_readlink_cstr((const char *)path, buf, sizeof(buf));
-            if(readlink_r <= 0){
+            sintptr_t realpath_r = IO_realpath_cstr((const char *)path, buf, sizeof(buf));
+            if(realpath_r <= 0){
               _abort();
             }
 
             uint8_t extracted_pci_name[12];
-            if(!STR_ExtractPCIAddressInsidePath(buf, readlink_r, extracted_pci_name)){
+            if(!STR_ExtractPCIAddressInsidePath(buf, realpath_r, extracted_pci_name)){
               _abort();
             }
 
