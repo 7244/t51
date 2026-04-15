@@ -27,6 +27,13 @@ static int _run_thread_dpdk(void *p_0){
     _udpcheck_pre = udpcheck_pre;
   }
 
+  uint64_t local_packet_bucket_capacity;
+  uint64_t local_packet_bucket;
+  if(pile.threshold != (uint64_t)-1){
+    local_packet_bucket_capacity = pile.dpdk.packet_bucket / 1024;
+  }
+  local_packet_bucket = local_packet_bucket_capacity;
+
   uint32_t tx_queue_index = __atomic_fetch_add(&pile.dpdk.given_worker_queues, 1, __ATOMIC_SEQ_CST);
 
   uint64_t *counter_ptr = (uint64_t *)&pile.dpdk.worker_packet_counters[tx_queue_index * 64];
@@ -79,13 +86,33 @@ static int _run_thread_dpdk(void *p_0){
 
     to = rte_eth_tx_burst(i_dpdk_interface, tx_queue_index, mbuf, sizeof(mbuf) / sizeof(mbuf[0]));
 
+    if(pile.threshold != (uint64_t)-1){
+      if(__builtin_expect(to >= local_packet_bucket, false)){
+        uint64_t diff = to - local_packet_bucket;
+        local_packet_bucket = local_packet_bucket_capacity - diff;
+
+        sint64_t packet_bucket = __atomic_sub_fetch(&pile.dpdk.packet_bucket, local_packet_bucket_capacity, __ATOMIC_SEQ_CST);
+        if(packet_bucket <= 0){
+          goto gt_end;
+        }
+      }
+      else{
+        local_packet_bucket -= to;
+      }
+      local_packet_bucket = pile.dpdk.packet_bucket / 1024;
+    }
+
     *counter_ptr += to;
     __flush_compiler_variable_rw(*counter_ptr);
   }
 
+  gt_end:;
+
   for(uint32_t i = 0; i < sizeof(mbuf) / sizeof(mbuf[0]); i++){
     rte_pktmbuf_free(mbuf[i]);
   }
+
+  __atomic_add_fetch(&pile.dpdk.finished_worker_queues, 1, __ATOMIC_SEQ_CST);
 
   return 0;
 }

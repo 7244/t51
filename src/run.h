@@ -508,9 +508,14 @@ FUNC void run_entry(void *p_0){
 
       pile.dpdk.given_worker_queues = 0;
       __flush_compiler_variable_rw(pile.dpdk.given_worker_queues);
+      pile.dpdk.finished_worker_queues = 0;
+      __flush_compiler_variable_rw(pile.dpdk.finished_worker_queues);
 
       *pile.dpdk.worker_stop_value = 0;
       __flush_compiler_variable_rw(pile.dpdk.worker_stop_value);
+
+      pile.dpdk.packet_bucket = pile.threshold;
+      __flush_compiler_variable_rw(pile.dpdk.packet_bucket);
 
       puts_literal("[INFORMATION] started.\n");
       flush_print();
@@ -531,6 +536,10 @@ FUNC void run_entry(void *p_0){
       while(1){
         TH_sleepi((uint64_t)1 << 30);
 
+        if(__atomic_load_n(&pile.dpdk.finished_worker_queues, __ATOMIC_SEQ_CST) == pile.dpdk.wanted_thread_count){
+          break;
+        }
+
         uint64_t new_total_sent_packets = 0;
         for(uint32_t i = 0; i < pile.dpdk.wanted_thread_count; i++){
           uint64_t *counter_ptr = (uint64_t *)&pile.dpdk.worker_packet_counters[i * 64];
@@ -541,13 +550,20 @@ FUNC void run_entry(void *p_0){
         if(total_sent_packets == new_total_sent_packets){
           puts_literal("[WARNING] total_sent_packets didnt change for 1 gibinanosecond. gonna restart dpdk device.\n");
           flush_print();
-          break;
+
+          __atomic_exchange_n(pile.dpdk.worker_stop_value, 1, __ATOMIC_SEQ_CST);
+
+          rte_eal_mp_wait_lcore();
+
+          if(rte_eth_dev_stop(i_dpdk_interface)){
+            _abort();
+          }
+
+          goto gt_start_dev;
         }
 
         total_sent_packets = new_total_sent_packets;
       }
-
-      __atomic_exchange_n(pile.dpdk.worker_stop_value, 1, __ATOMIC_SEQ_CST);
 
       rte_eal_mp_wait_lcore();
 
@@ -555,10 +571,9 @@ FUNC void run_entry(void *p_0){
         _abort();
       }
 
-      goto gt_start_dev;
+      /* TODO better deinit dpdk fully */
 
-      /* TODO */
-      _abort();
+      return;
     }
   #endif
 

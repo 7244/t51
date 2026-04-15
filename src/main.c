@@ -63,9 +63,12 @@ typedef struct{
       uint32_t wanted_thread_count;
 
       /* increases atomically */
-      uint32_t given_worker_queues;
+      uint32_t given_worker_queues __attribute__((aligned(64)));
+      uint32_t finished_worker_queues; /* TODO some settings arent finishable */
+      sint64_t packet_bucket; /* TODO some settings arent bucketable */
 
-      uint8_t *worker_packet_counters;
+
+      uint8_t *worker_packet_counters __attribute__((aligned(64)));
 
       uint32_t *worker_stop_value;
     }dpdk;
