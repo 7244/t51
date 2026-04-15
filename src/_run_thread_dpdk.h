@@ -2,10 +2,6 @@ static int _run_thread_dpdk(void *p_0){
   uint16_t i_dpdk_interface = pile.dpdk.i_dpdk_interface;
   struct rte_mempool *mempool = pile.dpdk.mempool;
 
-  uint32_t tx_queue_index = __atomic_fetch_add(&pile.dpdk.given_worker_queues, 1, __ATOMIC_SEQ_CST);
-
-  uint64_t *counter_ptr = (uint64_t *)&pile.dpdk.worker_packet_counters[tx_queue_index * 64];
-
   uint32_t *worker_stop_value = pile.dpdk.worker_stop_value;
 
   struct rte_mbuf *mbuf[32];
@@ -29,6 +25,20 @@ static int _run_thread_dpdk(void *p_0){
     /* but its short code and uses less execution memory */
     _ipv4check_pre = ipv4check_pre;
     _udpcheck_pre = udpcheck_pre;
+  }
+
+  uint32_t tx_queue_index = __atomic_fetch_add(&pile.dpdk.given_worker_queues, 1, __ATOMIC_SEQ_CST);
+
+  uint64_t *counter_ptr = (uint64_t *)&pile.dpdk.worker_packet_counters[tx_queue_index * 64];
+
+  while(*worker_stop_value == 0){
+    if(
+      __atomic_load_n(&pile.dpdk.wanted_thread_count, __ATOMIC_SEQ_CST) ==
+      __atomic_load_n(&pile.dpdk.given_worker_queues, __ATOMIC_SEQ_CST)
+    ){
+      break;
+    }
+    __processor_relax();
   }
 
   uint32_t total_iteration = 0;

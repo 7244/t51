@@ -60,6 +60,7 @@ typedef struct{
     struct{
       uint16_t i_dpdk_interface;
       struct rte_mempool *mempool;
+      uint32_t wanted_thread_count;
 
       /* increases atomically */
       uint32_t given_worker_queues;

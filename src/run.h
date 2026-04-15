@@ -148,8 +148,8 @@ FUNC void run_entry(void *p_0){
       }
 
       uint32_t dpdk_thread_count = rte_lcore_count();
-      uint32_t wanted_thread_count = pile.threads;
-      if(wanted_thread_count > dpdk_thread_count){
+      pile.dpdk.wanted_thread_count = pile.threads;
+      if(pile.dpdk.wanted_thread_count > dpdk_thread_count){
         _abort();
       }
 
@@ -396,12 +396,12 @@ FUNC void run_entry(void *p_0){
         _abort();
       }
 
-      if(wanted_thread_count > eth_dev_info.max_tx_queues){
+      if(pile.dpdk.wanted_thread_count > eth_dev_info.max_tx_queues){
         puts_literal("[WARNING] wanted_thread_count is above eth_dev_info.max_tx_queues. reducing wanted_thread_count to ");
         utility_puts_number(eth_dev_info.max_tx_queues);
         puts_literal(" from ");
-        utility_puts_number(wanted_thread_count);
-        wanted_thread_count = eth_dev_info.max_tx_queues;
+        utility_puts_number(pile.dpdk.wanted_thread_count);
+        pile.dpdk.wanted_thread_count = eth_dev_info.max_tx_queues;
         puts_literal(".\n");
         flush_print();
       }
@@ -432,7 +432,7 @@ FUNC void run_entry(void *p_0){
           .rmv = 0
         }
       };
-      err = rte_eth_dev_configure(i_dpdk_interface, 1, wanted_thread_count, &eth_conf);
+      err = rte_eth_dev_configure(i_dpdk_interface, 1, pile.dpdk.wanted_thread_count, &eth_conf);
       if(err){
         _abort();
       }
@@ -454,14 +454,14 @@ FUNC void run_entry(void *p_0){
         _abort();
       }
 
-      for(uint32_t ith = 0; ith < wanted_thread_count; ith++){
+      for(uint32_t ith = 0; ith < pile.dpdk.wanted_thread_count; ith++){
         err = rte_eth_tx_queue_setup(i_dpdk_interface, ith, 512, rte_eth_dev_socket_id(i_dpdk_interface), NULL);
         if(err){
           _abort();
         }
       }
 
-      pile.dpdk.worker_packet_counters = __generic_mmap(wanted_thread_count * 64);
+      pile.dpdk.worker_packet_counters = __generic_mmap(pile.dpdk.wanted_thread_count * 64);
       if((uintptr_t)pile.dpdk.worker_packet_counters > (uintptr_t)-0x1000){
         _abort();
       }
@@ -518,7 +518,7 @@ FUNC void run_entry(void *p_0){
       uint32_t given_threads = 0;
       uint32_t lcore_id;
       RTE_LCORE_FOREACH_WORKER(lcore_id){
-        if(given_threads < wanted_thread_count){
+        if(given_threads < pile.dpdk.wanted_thread_count){
           err = rte_eal_remote_launch(_run_thread_dpdk, NULL, lcore_id);
           if(err){
             _abort();
@@ -532,7 +532,7 @@ FUNC void run_entry(void *p_0){
         TH_sleepi((uint64_t)1 << 30);
 
         uint64_t new_total_sent_packets = 0;
-        for(uint32_t i = 0; i < wanted_thread_count; i++){
+        for(uint32_t i = 0; i < pile.dpdk.wanted_thread_count; i++){
           uint64_t *counter_ptr = (uint64_t *)&pile.dpdk.worker_packet_counters[i * 64];
 
           new_total_sent_packets += *counter_ptr;
