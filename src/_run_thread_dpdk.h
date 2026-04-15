@@ -90,7 +90,6 @@ static int _run_thread_dpdk(void *p_0){
       if(__builtin_expect(to >= local_packet_bucket, false)){
         uint64_t diff = to - local_packet_bucket;
         local_packet_bucket = local_packet_bucket_capacity - diff;
-
         sint64_t packet_bucket = __atomic_sub_fetch(&pile.dpdk.packet_bucket, local_packet_bucket_capacity, __ATOMIC_SEQ_CST);
         if(packet_bucket <= 0){
           goto gt_end;
@@ -99,7 +98,6 @@ static int _run_thread_dpdk(void *p_0){
       else{
         local_packet_bucket -= to;
       }
-      local_packet_bucket = pile.dpdk.packet_bucket / 1024;
     }
 
     *counter_ptr += to;
